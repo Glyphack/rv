@@ -1,0 +1,32 @@
+[project]
+name = "rv"
+version = "0.1.0"
+description = "Local code review for AI agents"
+readme = "README.md"
+authors = [
+    { name = "Glyphack", email = "sh.hooshyari@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.128.3",
+    "jinja2>=3.1.6",
+    "tree-sitter>=0.22.3",
+    "uvicorn>=0.40.0",
+]
+
+[project.scripts]
+rv = "rv.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.10.0,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "prek>=0.3.2",
+    "pyright>=1.1.408",
+    "pytest>=9.0.2",
+]
+
+[tool.pyright]
+ignore = ["scratch/"]

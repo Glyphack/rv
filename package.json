@@ -1,0 +1,22 @@
+{
+  "name": "rv-frontend",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@hotwired/stimulus": "^3.2.2",
+    "@tailwindcss/cli": "^4.1.18",
+    "@tailwindcss/language-server": "^0.14.29",
+    "diff2html": "^3.4.56",
+    "esbuild": "^0.27.3",
+    "highlight.js": "^11.11.1",
+    "tailwindcss": "^4.1.18"
+  },
+  "scripts": {
+    "build": "esbuild web/src/main.ts --bundle --outfile=./src/rv/static/bundle.js",
+    "watch": "esbuild web/src/main.ts --bundle --outfile=./src/rv/static/bundle.js --watch"
+  },
+  "devDependencies": {
+    "prettier": "3.8.1",
+    "prettier-plugin-tailwindcss": "^0.7.2"
+  }
+}

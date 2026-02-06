@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>rv</title>
+    <link rel="stylesheet" href="/static/output.css" />
+    <link rel="stylesheet" href="/static/bundle.css" />
+  </head>
+  <body>
+    <div
+      class="m-4 grid grid-cols-[auto_auto_auto] items-center gap-3"
+      data-controller="checks"
+    >
+      <div>
+        Checks
+        <span
+          data-checks-target="status"
+          class="{% if checks.status.value == 'pass' %}text-green-600{% elif checks.status.value == 'fail' %}text-red-500{% else %}text-gray-500{% endif %}"
+        >
+          {{ checks.status.value }}
+        </span>
+      </div>
+      <pre
+        data-checks-target="output"
+        class="col-span-full whitespace-pre-wrap text-xs text-gray-600"
+        >{{ checks.output }}</pre
+      >
+      <button
+        class="rounded bg-gray-200 px-3 py-1 text-sm hover:bg-gray-300"
+        type="button"
+        data-action="checks#refresh"
+      >
+        Refresh
+      </button>
+    </div>
+    <div
+      class="flex flex-col"
+      data-controller="review"
+    >
+      <div class="flex">
+        <button
+          class="sticky top-0 h-8 shrink-0 rounded px-1.5 py-0.5 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          type="button"
+          data-action="review#toggleSidebar"
+          data-review-target="sidebarToggle"
+        >
+          ◀
+        </button>
+        <nav
+          class="sticky top-0 flex h-screen w-64 shrink-0 flex-col gap-3 overflow-y-auto border-r border-gray-200 p-3"
+          data-review-target="sidebar"
+        >
+          <div class="flex flex-col gap-2">
+            <label class="text-xs font-medium text-gray-500">Branch</label>
+            <select
+              data-review-target="branchSelect"
+              data-action="change->review#fetchDiff"
+              class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+            >
+              <option value="">Current (working tree)</option>
+            </select>
+          </div>
+          <button
+            class="mt-3 w-full rounded-md bg-green-500 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-green-600 active:bg-green-700"
+            type="button"
+            data-action="review#finishReview"
+          >
+            Finish review
+          </button>
+          <div data-review-target="fileExplorer"></div>
+        </nav>
+        <div class="min-w-0 flex-1 overflow-x-auto" data-review-target="output"></div>
+      </div>
+    </div>
+    <script src="/static/bundle.js"></script>
+  </body>
+</html>
