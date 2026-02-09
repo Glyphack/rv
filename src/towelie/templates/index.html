@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>rv</title>
+    <title>towelie</title>
     <link rel="stylesheet" href="/static/output.css" />
     <link rel="stylesheet" href="/static/bundle.css" />
   </head>
@@ -16,16 +16,15 @@
         Checks
         <span
           data-checks-target="status"
-          class="{% if checks.status.value == 'pass' %}text-green-600{% elif checks.status.value == 'fail' %}text-red-500{% else %}text-gray-500{% endif %}"
+          class="text-gray-500"
         >
-          {{ checks.status.value }}
+          loading…
         </span>
       </div>
       <pre
         data-checks-target="output"
         class="col-span-full whitespace-pre-wrap text-xs text-gray-600"
-        >{{ checks.output }}</pre
-      >
+      ></pre>
       <button
         class="rounded bg-gray-200 px-3 py-1 text-sm hover:bg-gray-300"
         type="button"
@@ -58,14 +57,14 @@
               data-action="change->review#branchChanged"
               class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
             >
-              <option value="">Current (working tree)</option>
+              <option value="">Current branch</option>
             </select>
           </div>
           <div class="flex flex-col gap-2">
             <label class="text-xs font-medium text-gray-500">Base branch</label>
             <select
               data-review-target="baseBranchSelect"
-              data-action="change->review#baseBranchChanged"
+              data-action="change->review#branchChanged"
               class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
             ></select>
           </div>
@@ -73,10 +72,9 @@
             <label class="text-xs font-medium text-gray-500">Commit</label>
             <select
               data-review-target="commitSelect"
-              data-action="change->review#commitChanged"
+              data-action="change->review#reloadReview"
               class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
             >
-              <option value="">All commits (branch diff)</option>
             </select>
           </div>
           <button

@@ -6,6 +6,10 @@ export default class ChecksController extends Controller {
   declare readonly statusTarget: HTMLElement;
   declare readonly outputTarget: HTMLElement;
 
+  connect() {
+    this.refresh();
+  }
+
   async refresh() {
     this.statusTarget.textContent = "loading…";
     this.outputTarget.textContent = "";

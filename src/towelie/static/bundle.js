@@ -25127,6 +25127,9 @@
     static {
       this.targets = ["status", "output"];
     }
+    connect() {
+      this.refresh();
+    }
     async refresh() {
       this.statusTarget.textContent = "loading\u2026";
       this.outputTarget.textContent = "";
@@ -25166,7 +25169,7 @@
       this.comments = [];
       this.activeForm = null;
       this.selection = null;
-      this.mode = "worktree" /* Worktree */;
+      this.sidebarVisible = true;
     }
     static {
       this.targets = [
@@ -25180,54 +25183,28 @@
       ];
     }
     static {
-      this.values = {
-        diff: { type: Object, default: {} },
-        sidebarVisible: { type: Boolean, default: true }
-      };
-    }
-    static {
-      this.STORAGE_KEY = "rv-comments";
-    }
-    diffValueChanged() {
-      this.outputTarget.innerHTML = "";
-      const diff2htmlUi = new import_diff2html_ui_slim.Diff2HtmlUI(this.outputTarget, this.diffValue.diff, {
-        drawFileList: true,
-        matching: "lines",
-        outputFormat: "side-by-side"
-      });
-      diff2htmlUi.draw();
-      this.renderFileExplorer();
-      this.loadComments();
-      this.renderCommentsList();
-    }
-    toggleSidebar() {
-      this.sidebarVisibleValue = !this.sidebarVisibleValue;
-    }
-    sidebarVisibleValueChanged() {
-      if (this.sidebarVisibleValue) {
-        this.sidebarTarget.style.display = "";
-        this.sidebarToggleTarget.textContent = "\u25C0";
-      } else {
-        this.sidebarTarget.style.display = "none";
-        this.sidebarToggleTarget.textContent = "\u25B6";
-      }
+      this.STORAGE_KEY = "towelie-comments";
     }
     async connect() {
       this.loadComments();
       await this.loadBranches();
       await this.reloadReview();
       this.outputTarget.addEventListener("mousedown", (e) => {
-        if (!(e.target instanceof HTMLElement)) {
-          return;
-        }
-        if (!e.target.classList.contains("d2h-code-side-linenumber")) {
-          return;
-        }
+        if (!(e.target instanceof HTMLElement)) return;
+        if (!e.target.classList.contains("d2h-code-side-linenumber")) return;
         const lineNumber = Number(e.target.textContent);
         if (isNaN(lineNumber)) return;
         const fileDiffContainer = e.target.closest(".d2h-file-wrapper");
         const fileName = fileDiffContainer.querySelector(".d2h-file-name")?.textContent?.trim() || "unknown";
-        const diffSide = this.getDiffSide(e.target);
+        const filesDiv = e.target.closest(".d2h-files-diff");
+        let diffSide = "new" /* New */;
+        if (filesDiv) {
+          const sides = Array.from(
+            filesDiv.querySelectorAll(":scope > .d2h-file-side-diff")
+          );
+          const sideDiv = e.target.closest(".d2h-file-side-diff");
+          if (sideDiv === sides[0]) diffSide = "old" /* Old */;
+        }
         if (this.selection === null) {
           this.selection = { fileName, startLine: lineNumber, diffSide };
           return;
@@ -25236,99 +25213,18 @@
         this.handleSelectionEnded(e.target, this.selection);
       });
     }
-    deriveMode() {
-      const branch = this.branchSelectTarget.value;
-      const commit = this.commitSelectTarget.value;
-      if (commit) return "commit" /* Commit */;
-      if (!branch) return "worktree" /* Worktree */;
-      return "branch" /* Branch */;
-    }
-    applyModeConstraints() {
-      switch (this.mode) {
-        case "worktree" /* Worktree */:
-          this.commitSelectTarget.disabled = true;
-          this.baseBranchSelectTarget.disabled = false;
-          break;
-        case "branch" /* Branch */:
-          this.commitSelectTarget.disabled = false;
-          this.baseBranchSelectTarget.disabled = false;
-          break;
-        case "commit" /* Commit */:
-          this.commitSelectTarget.disabled = false;
-          this.baseBranchSelectTarget.disabled = true;
-          break;
-      }
+    branchChanged() {
+      this.commitSelectTarget.value = "";
+      this.reloadReview();
     }
     async reloadReview() {
-      this.mode = this.deriveMode();
-      this.applyModeConstraints();
-      if (this.mode !== "commit" /* Commit */) {
-        const branch = this.branchSelectTarget.value;
-        const baseBranch = this.baseBranchSelectTarget.value;
-        await this.loadCommits(branch, baseBranch);
-      }
-      await this.fetchDiff();
-    }
-    async loadBranches() {
-      const res = await fetch("/api/branches");
-      const data = await res.json();
-      const currentBranch = data.current;
-      for (const branch of data.branches) {
-        const option = document.createElement("option");
-        option.value = branch;
-        option.textContent = branch;
-        this.branchSelectTarget.appendChild(option);
-      }
-      const baseBranches = data.branches.filter((branch) => branch !== currentBranch).sort((a, b) => a.localeCompare(b));
-      if (!this.baseBranchSelectTarget.options.length) {
-        const defaultOption = document.createElement("option");
-        defaultOption.value = "";
-        defaultOption.textContent = "Default (main/master)";
-        this.baseBranchSelectTarget.appendChild(defaultOption);
-      }
-      for (const branch of baseBranches) {
-        const option = document.createElement("option");
-        option.value = branch;
-        option.textContent = branch;
-        this.baseBranchSelectTarget.appendChild(option);
-      }
-    }
-    clearCommitOptions() {
-      this.commitSelectTarget.innerHTML = "";
-      const option = document.createElement("option");
-      option.value = "";
-      option.textContent = "All commits (branch diff)";
-      this.commitSelectTarget.appendChild(option);
-    }
-    async loadCommits(branch, baseBranch) {
-      this.clearCommitOptions();
-      if (!branch) return;
-      const params = new URLSearchParams({ branch });
-      if (baseBranch) {
-        params.set("base", baseBranch);
-      }
-      const res = await fetch(`/api/commits?${params.toString()}`);
-      const data = await res.json();
-      for (const commit of data.commits) {
-        const option = document.createElement("option");
-        option.value = commit.hash;
-        option.textContent = commit.label;
-        this.commitSelectTarget.appendChild(option);
-      }
-    }
-    async fetchDiff() {
       const branch = this.branchSelectTarget.value;
+      const base = this.baseBranchSelectTarget.value;
       const commit = this.commitSelectTarget.value;
-      const baseBranch = this.baseBranchSelectTarget.value;
       const params = new URLSearchParams();
-      if (commit) {
-        params.set("commit", commit);
-      } else if (branch) {
-        params.set("branch", branch);
-      }
-      if (this.mode !== "commit" /* Commit */ && baseBranch) {
-        params.set("base", baseBranch);
-      }
+      if (branch) params.set("branch", branch);
+      if (base) params.set("base", base);
+      if (commit) params.set("commit", commit);
       const url = params.toString() ? `/api/diff?${params.toString()}` : "/api/diff";
       const res = await fetch(url);
       const data = await res.json();
@@ -25339,28 +25235,174 @@
         outputFormat: "side-by-side"
       });
       diff2htmlUi.draw();
-      this.diffValue = data;
+      this.renderFileExplorer(data.files);
+      this.populateCommitSelect(data);
       this.loadComments();
       this.renderCommentsList();
     }
-    async branchChanged() {
-      await this.reloadReview();
+    toggleSidebar() {
+      this.sidebarVisible = !this.sidebarVisible;
+      if (this.sidebarVisible) {
+        this.sidebarTarget.style.display = "";
+        this.sidebarToggleTarget.textContent = "\u25C0";
+      } else {
+        this.sidebarTarget.style.display = "none";
+        this.sidebarToggleTarget.textContent = "\u25B6";
+      }
     }
-    async baseBranchChanged() {
-      await this.reloadReview();
+    addComment(selection, text) {
+      const branch = this.branchSelectTarget.value || "current";
+      const comment = { selection, text, branch };
+      this.comments.push(comment);
+      this.saveComments();
+      this.renderCommentsList();
     }
-    async commitChanged() {
-      await this.reloadReview();
+    removeComment(e) {
+      const btn = e.currentTarget;
+      const index = parseInt(btn.dataset.index || "0", 10);
+      this.comments.splice(index, 1);
+      this.saveComments();
+      this.renderCommentsList();
     }
-    getDiffSide(element) {
-      const filesDiv = element.closest(".d2h-files-diff");
-      if (!filesDiv) return "new" /* New */;
-      const sides = Array.from(
-        filesDiv.querySelectorAll(":scope > .d2h-file-side-diff")
+    async finishReview(e) {
+      const btn = e.currentTarget;
+      const currentBranch = this.branchSelectTarget.value || "current";
+      const branchComments = this.comments.filter(
+        (c) => c.branch === currentBranch
       );
-      const sideDiv = element.closest(".d2h-file-side-diff");
-      if (sideDiv === sides[0]) return "old" /* Old */;
-      return "new" /* New */;
+      if (branchComments.length === 0) {
+        const original2 = btn.textContent;
+        btn.textContent = "No comments to copy";
+        btn.disabled = true;
+        setTimeout(() => {
+          btn.textContent = original2;
+          btn.disabled = false;
+        }, 2e3);
+        return;
+      }
+      const blocks = branchComments.map((c) => {
+        const s = c.selection;
+        const sideLabel = s.diffSide === "old" /* Old */ ? "old code (before the change)" : "new code (after the change)";
+        return `${s.fileName} lines ${s.startLine}-${s.endLine} on the ${sideLabel}
+
+\`\`\`
+${c.text}
+\`\`\``;
+      });
+      const reviewText = "Here's the review of the user:\n\n" + blocks.join("\n\n---\n\n");
+      await navigator.clipboard.writeText(reviewText);
+      this.comments = this.comments.filter((c) => c.branch !== currentBranch);
+      this.saveComments();
+      this.renderCommentsList();
+      const original = btn.textContent;
+      btn.textContent = "Copied to clipboard!";
+      btn.disabled = true;
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.disabled = false;
+      }, 2e3);
+    }
+    async loadBranches() {
+      const res = await fetch("/api/branches");
+      const data = await res.json();
+      const defaultOption = this.branchSelectTarget.options[0];
+      defaultOption.textContent = `${data.current} (current)`;
+      for (const branch of data.branches) {
+        const option = document.createElement("option");
+        option.value = branch;
+        option.textContent = branch;
+        this.branchSelectTarget.appendChild(option);
+      }
+      const baseBranches = data.branches.filter((branch) => branch !== data.current).sort((a, b) => a.localeCompare(b));
+      if (!this.baseBranchSelectTarget.options.length) {
+        const defaultOption2 = document.createElement("option");
+        defaultOption2.value = "";
+        defaultOption2.textContent = "Default (main/master)";
+        this.baseBranchSelectTarget.appendChild(defaultOption2);
+      }
+      for (const branch of baseBranches) {
+        const option = document.createElement("option");
+        option.value = branch;
+        option.textContent = branch;
+        this.baseBranchSelectTarget.appendChild(option);
+      }
+    }
+    populateCommitSelect(data) {
+      const savedValue = this.commitSelectTarget.value;
+      this.commitSelectTarget.innerHTML = "";
+      for (const commit of data.commits) {
+        const option = document.createElement("option");
+        option.value = commit.hash;
+        option.textContent = commit.label;
+        this.commitSelectTarget.appendChild(option);
+      }
+      const options = Array.from(this.commitSelectTarget.options);
+      if (options.some((o) => o.value === savedValue)) {
+        this.commitSelectTarget.value = savedValue;
+      }
+    }
+    renderFileExplorer(files) {
+      const nav = this.fileExplorerTarget;
+      nav.innerHTML = "";
+      const title = document.createElement("h3");
+      title.className = "mb-2 text-sm font-semibold text-gray-700";
+      title.textContent = "Files";
+      nav.appendChild(title);
+      const fileLinks = this.outputTarget.querySelectorAll(
+        ".d2h-file-list a.d2h-file-name"
+      );
+      const hrefMap = /* @__PURE__ */ new Map();
+      fileLinks.forEach((a) => {
+        const name = a.textContent?.trim();
+        if (name && a.hash) hrefMap.set(name, a.hash);
+      });
+      const root = /* @__PURE__ */ new Map();
+      for (const file of files || []) {
+        const parts = file.split("/");
+        let current = root;
+        for (let i = 0; i < parts.length; i++) {
+          const part = parts[i];
+          const isFile = i === parts.length - 1;
+          if (isFile) {
+            current.set(part, file);
+          } else {
+            if (!current.has(part)) {
+              current.set(part, /* @__PURE__ */ new Map());
+            }
+            current = current.get(part);
+          }
+        }
+      }
+      const container = document.createElement("div");
+      container.className = "flex flex-col";
+      this.renderTreeLevel(container, root, hrefMap, 0);
+      nav.appendChild(container);
+    }
+    renderTreeLevel(parent, tree, hrefMap, depth) {
+      const entries = Array.from(tree.entries());
+      const folders = entries.filter(([, v]) => v instanceof Map);
+      const files = entries.filter(([, v]) => typeof v === "string");
+      for (const [name, subtree] of folders) {
+        const folderEl = document.createElement("div");
+        folderEl.style.paddingLeft = `${depth * 12}px`;
+        const label = document.createElement("span");
+        label.className = "flex items-center gap-1 py-0.5 text-xs font-medium text-gray-500";
+        label.textContent = `\u{1F4C1} ${name}`;
+        folderEl.appendChild(label);
+        parent.appendChild(folderEl);
+        this.renderTreeLevel(parent, subtree, hrefMap, depth + 1);
+      }
+      for (const [name, fullPath] of files) {
+        const fileEl = document.createElement("div");
+        fileEl.style.paddingLeft = `${depth * 12}px`;
+        const a = document.createElement("a");
+        a.className = "block truncate rounded px-1 py-0.5 text-xs text-gray-700 hover:bg-gray-100";
+        a.textContent = name;
+        const hash = hrefMap.get(fullPath);
+        if (hash) a.href = hash;
+        fileEl.appendChild(a);
+        parent.appendChild(fileEl);
+      }
     }
     handleSelectionEnded(target, selection) {
       const row = target.closest("tr") || target.closest(".d2h-code-line-ctn")?.parentElement;
@@ -25417,132 +25459,18 @@
       this.activeForm = form;
       form.querySelector("textarea").focus();
     }
-    addComment(selection, text) {
-      const branch = this.branchSelectTarget.value || "current";
-      const comment = { selection, text, branch };
-      this.comments.push(comment);
-      this.saveComments();
-      this.renderCommentsList();
-    }
-    async finishReview(e) {
-      const btn = e.currentTarget;
-      const currentBranch = this.branchSelectTarget.value || "current";
-      const branchComments = this.comments.filter((c) => c.branch === currentBranch);
-      if (branchComments.length === 0) {
-        this.showButtonFeedback(btn, "No comments to copy");
-        return;
-      }
-      const blocks = branchComments.map((c) => {
-        const s = c.selection;
-        const sideLabel = s.diffSide === "old" /* Old */ ? "old code (before the change)" : "new code (after the change)";
-        return `${s.fileName} lines ${s.startLine}-${s.endLine} on the ${sideLabel}
-
-\`\`\`
-${c.text}
-\`\`\``;
-      });
-      const reviewText = "Here's the review of the user:\n\n" + blocks.join("\n\n---\n\n");
-      await navigator.clipboard.writeText(reviewText);
-      this.comments = this.comments.filter((c) => c.branch !== currentBranch);
-      this.saveComments();
-      this.renderCommentsList();
-      this.showButtonFeedback(btn, "Copied to clipboard!");
-    }
-    showButtonFeedback(btn, message) {
-      const original = btn.textContent;
-      btn.textContent = message;
-      btn.disabled = true;
-      setTimeout(() => {
-        btn.textContent = original;
-        btn.disabled = false;
-      }, 2e3);
-    }
-    removeComment(e) {
-      const btn = e.currentTarget;
-      const index = parseInt(btn.dataset.index || "0", 10);
-      this.comments.splice(index, 1);
-      this.saveComments();
-      this.renderCommentsList();
-    }
-    buildFileTree(files) {
-      const root = /* @__PURE__ */ new Map();
-      for (const file of files) {
-        const parts = file.split("/");
-        let current = root;
-        for (let i = 0; i < parts.length; i++) {
-          const part = parts[i];
-          const isFile = i === parts.length - 1;
-          if (isFile) {
-            current.set(part, file);
-          } else {
-            if (!current.has(part)) {
-              current.set(part, /* @__PURE__ */ new Map());
-            }
-            current = current.get(part);
-          }
-        }
-      }
-      return root;
-    }
-    renderTreeLevel(parent, tree, hrefMap, depth) {
-      const entries = Array.from(tree.entries());
-      const folders = entries.filter(([, v]) => v instanceof Map);
-      const files = entries.filter(([, v]) => typeof v === "string");
-      for (const [name, subtree] of folders) {
-        const folderEl = document.createElement("div");
-        folderEl.style.paddingLeft = `${depth * 12}px`;
-        const label = document.createElement("span");
-        label.className = "flex items-center gap-1 py-0.5 text-xs font-medium text-gray-500";
-        label.textContent = `\u{1F4C1} ${name}`;
-        folderEl.appendChild(label);
-        parent.appendChild(folderEl);
-        this.renderTreeLevel(parent, subtree, hrefMap, depth + 1);
-      }
-      for (const [name, fullPath] of files) {
-        const fileEl = document.createElement("div");
-        fileEl.style.paddingLeft = `${depth * 12}px`;
-        const a = document.createElement("a");
-        a.className = "block truncate rounded px-1 py-0.5 text-xs text-gray-700 hover:bg-gray-100";
-        a.textContent = name;
-        const hash = hrefMap.get(fullPath);
-        if (hash) a.href = hash;
-        fileEl.appendChild(a);
-        parent.appendChild(fileEl);
-      }
-    }
-    renderFileExplorer() {
-      const nav = this.fileExplorerTarget;
-      nav.innerHTML = "";
-      const title = document.createElement("h3");
-      title.className = "mb-2 text-sm font-semibold text-gray-700";
-      title.textContent = "Files";
-      nav.appendChild(title);
-      const fileLinks = this.outputTarget.querySelectorAll(
-        ".d2h-file-list a.d2h-file-name"
-      );
-      const hrefMap = /* @__PURE__ */ new Map();
-      fileLinks.forEach((a) => {
-        const name = a.textContent?.trim();
-        if (name && a.hash) hrefMap.set(name, a.hash);
-      });
-      const tree = this.buildFileTree(this.diffValue.files || []);
-      const container = document.createElement("div");
-      container.className = "flex flex-col";
-      this.renderTreeLevel(container, tree, hrefMap, 0);
-      nav.appendChild(container);
-    }
     renderCommentsList() {
-      this.outputTarget.querySelectorAll(".rv-comment-btn").forEach((el) => {
+      this.outputTarget.querySelectorAll(".towelie-comment-btn").forEach((el) => {
         if (el.tagName === "TR") {
           el.querySelectorAll(".d2h-code-side-linenumber").forEach((ln) => {
             ln.style.backgroundColor = "";
           });
-          el.classList.remove("rv-comment-btn");
+          el.classList.remove("towelie-comment-btn");
         } else {
           el.remove();
         }
       });
-      this.outputTarget.querySelectorAll(".rv-comment-popup").forEach((popup) => popup.remove());
+      this.outputTarget.querySelectorAll(".towelie-comment-popup").forEach((popup) => popup.remove());
       const currentBranch = this.branchSelectTarget.value || "current";
       const filteredComments = this.comments.filter(
         (c) => c.branch === currentBranch
@@ -25576,25 +25504,25 @@ ${c.text}
             if (isNaN(num) || num < startLine || num > endLine) continue;
             const row = lineEl.closest("tr");
             if (!row) continue;
-            row.classList.add("rv-comment-btn");
+            row.classList.add("towelie-comment-btn");
             lineEl.style.backgroundColor = "rgba(250, 204, 21, 0.15)";
             if (!firstRow) firstRow = row;
           }
           if (!firstRow) continue;
           firstRow.style.position = "relative";
           const btn = document.createElement("button");
-          btn.className = "rv-comment-btn absolute -left-1 top-0 w-5 h-5 rounded-full bg-yellow-400 text-[10px] leading-5 text-center cursor-pointer hover:bg-yellow-500 z-10";
+          btn.className = "towelie-comment-btn absolute -left-1 top-0 w-5 h-5 rounded-full bg-yellow-400 text-[10px] leading-5 text-center cursor-pointer hover:bg-yellow-500 z-10";
           btn.textContent = "\u{1F4AC}";
           btn.title = comment.text;
           btn.addEventListener("click", (e) => {
             e.stopPropagation();
-            const existing = firstRow.querySelector(".rv-comment-popup");
+            const existing = firstRow.querySelector(".towelie-comment-popup");
             if (existing) {
               existing.remove();
               return;
             }
             const popup = document.createElement("div");
-            popup.className = "rv-comment-popup absolute left-6 top-0 w-64 p-2 bg-white border border-gray-300 rounded shadow-lg text-sm z-20";
+            popup.className = "towelie-comment-popup absolute left-6 top-0 w-64 p-2 bg-white border border-gray-300 rounded shadow-lg text-sm z-20";
             popup.addEventListener("click", (ev) => ev.stopPropagation());
             const textEl = document.createElement("p");
             textEl.textContent = comment.text;

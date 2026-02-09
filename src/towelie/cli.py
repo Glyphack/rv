@@ -1,12 +1,27 @@
 import argparse
+import os
 import subprocess
 import sys
+import threading
+import time
 import webbrowser
 from pathlib import Path
+import urllib.request
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 FRONTEND_DIR = PROJECT_ROOT / "web"
+
+
+def open_when_ready(port: int):
+    url = f"http://localhost:{port}"
+    while True:
+        try:
+            urllib.request.urlopen(url, timeout=1)
+            break
+        except Exception:
+            time.sleep(0.2)
+    webbrowser.open(url)
 
 
 def check_git_repository():
@@ -17,13 +32,14 @@ def check_git_repository():
         text=True,
     )
     if result.returncode != 0:
-        print("Error: rv only supports git repositories", file=sys.stderr)
-        print("Please run rv from within a git repository", file=sys.stderr)
+        print("Error: towelie only supports git repositories", file=sys.stderr)
+        print("Please run towelie from within a git repository", file=sys.stderr)
         sys.exit(1)
 
 
 def dev():
     check_git_repository()
+    os.environ["TOWELIE_DEV"] = "1"
     import uvicorn
 
     static_dir = Path(__file__).resolve().parent / "static"
@@ -44,10 +60,10 @@ def dev():
     )
 
     port = 4242
-    print(f"\n  rv → http://localhost:{port}\n")
-    webbrowser.open(f"http://localhost:{port}")
+    print(f"\n  towelie → http://localhost:{port}\n")
+    threading.Thread(target=open_when_ready, args=(port,), daemon=True).start()
     try:
-        uvicorn.run("rv.app:app", host="127.0.0.1", port=port, reload=True)
+        uvicorn.run("towelie.app:app", host="127.0.0.1", port=port, reload=True)
     finally:
         esbuild.terminate()
         tailwind.terminate()
@@ -58,13 +74,13 @@ def run():
     import uvicorn
 
     port = 4242
-    print(f"\n  rv → http://localhost:{port}\n")
-    webbrowser.open(f"http://localhost:{port}")
-    uvicorn.run("rv.app:app", host="127.0.0.1", port=port)
+    print(f"\n  towelie → http://localhost:{port}\n")
+    threading.Thread(target=open_when_ready, args=(port,), daemon=True).start()
+    uvicorn.run("towelie.app:app", host="127.0.0.1", port=port)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="rv - Local code review for AI agents")
+    parser = argparse.ArgumentParser(description="towelie - Local code review for AI agents")
     parser.add_argument("--dev", action="store_true", help="Run in development mode with npm and tailwind watchers")
     args = parser.parse_args()
 
