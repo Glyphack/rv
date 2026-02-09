@@ -2,7 +2,6 @@ import asyncio
 from dataclasses import dataclass, asdict
 from enum import Enum
 import os
-import subprocess
 from pathlib import Path
 import sys
 
@@ -59,6 +58,8 @@ class DiffResponse:
     is_current_branch: bool
     diff: str
     files: list[str]
+    branches: list[str]
+    current_branch: str
 
 
 app = FastAPI()
@@ -68,36 +69,39 @@ app.mount(
 )
 
 
-def get_git_root() -> Path:
+async def get_git_root() -> Path:
     _log_cmd(["git", "rev-parse", "--show-toplevel"])
-    result = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        capture_output=True,
-        text=True,
+    proc = await asyncio.create_subprocess_exec(
+        "git", "rev-parse", "--show-toplevel",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
-    if result.returncode != 0:
+    stdout, _ = await proc.communicate()
+    if proc.returncode != 0:
         print("Error: not a git repository", file=sys.stderr)
         sys.exit(1)
-    return Path(result.stdout.strip())
+    return Path(stdout.decode().strip())
 
 
-def get_base_branch():
+async def get_base_branch():
     """Detect base branch by trying main and master and see which one exists."""
     for branch in ("main", "master"):
         _log_cmd(["git", "rev-parse", "--verify", branch])
-        result = subprocess.run(
-            ["git", "rev-parse", "--verify", branch],
-            capture_output=True,
+        proc = await asyncio.create_subprocess_exec(
+            "git", "rev-parse", "--verify", branch,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        if result.returncode == 0:
+        await proc.communicate()
+        if proc.returncode == 0:
             return branch
     return "main"
 
 
 @dataclass
 class Project:
-    git_root: Path = get_git_root()
-    base_branch = get_base_branch()
+    git_root: Path
+    base_branch: str
 
     def _has_precommit_config(self) -> bool:
         return (self.git_root / ".pre-commit-config.yaml").exists()
@@ -108,34 +112,45 @@ class Project:
             return CheckCommand(command="prek -a")
         return None
 
-    def get_current_branch(self) -> str:
+    async def get_current_branch(self) -> str:
         _log_cmd(["git", "branch", "--show-current"])
-        result = subprocess.run(
-            ["git", "branch", "--show-current"],
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "branch",
+            "--show-current",
             cwd=self.git_root,
-            capture_output=True,
-            text=True,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        return result.stdout.strip()
+        stdout, _ = await proc.communicate()
+        return stdout.decode().strip()
 
     async def get_uncommitted_diff(self) -> DiffResult:
         _log_cmd(["git", "diff", "HEAD", "--unified=10"])
         diff_proc = await asyncio.create_subprocess_exec(
-            "git", "diff", "HEAD", "--unified=10",
+            "git",
+            "diff",
+            "HEAD",
+            "--unified=10",
             cwd=self.git_root,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         _log_cmd(["git", "diff", "--cached", "--name-only"])
         staged_files = await asyncio.create_subprocess_exec(
-            "git", "diff", "--cached", "--name-only",
+            "git",
+            "diff",
+            "--cached",
+            "--name-only",
             cwd=self.git_root,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         _log_cmd(["git", "diff", "--name-only"])
         unstaged_files = await asyncio.create_subprocess_exec(
-            "git", "diff", "--name-only",
+            "git",
+            "diff",
+            "--name-only",
             cwd=self.git_root,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -195,7 +210,7 @@ class Project:
         merge_base_ref = stdout.decode().strip()
 
         cmd = ["git", "diff", merge_base_ref, "--unified=10"]
-        if branch != self.get_current_branch():
+        if branch != await self.get_current_branch():
             cmd.insert(3, branch)
 
         _log_cmd(cmd)
@@ -207,7 +222,7 @@ class Project:
         )
         diff_stdout, _ = await diff_proc.communicate()
 
-        is_current = branch == self.get_current_branch()
+        is_current = branch == await self.get_current_branch()
         _log_cmd(["git", "diff", f"{base}...{branch}", "--name-only"])
         files_proc = await asyncio.create_subprocess_exec(
             "git",
@@ -251,7 +266,7 @@ class Project:
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, _ = await proc.communicate()
-        current = self.get_current_branch()
+        current = await self.get_current_branch()
         return [b for b in stdout.decode().strip().split("\n") if b and b != current]
 
     async def get_commits(
@@ -259,14 +274,16 @@ class Project:
         branch: str,
         base: str,
     ) -> list[CommitInfo]:
-        is_current = branch == self.get_current_branch()
+        is_current = branch == await self.get_current_branch()
         if is_current:
             all_label = "All changes (committed + uncommitted)"
         else:
             all_label = "All commits (branch diff)"
         commits: list[CommitInfo] = [CommitInfo(hash="", label=all_label)]
         if is_current:
-            commits.append(CommitInfo(hash=UNCOMMITTED, label="Uncommitted changes only"))
+            commits.append(
+                CommitInfo(hash=UNCOMMITTED, label="Uncommitted changes only")
+            )
         _log_cmd(["git", "log", f"{base}..{branch}", "--pretty=format:%H%x00%s"])
         proc = await asyncio.create_subprocess_exec(
             "git",
@@ -314,12 +331,16 @@ class Project:
         error = stderr.decode()
         if proc.returncode == 0:
             return CheckResult(status=CheckStatus.PASS, output=output)
-        return CheckResult(
-            status=CheckStatus.FAIL, output=output, error=error
-        )
+        return CheckResult(status=CheckStatus.FAIL, output=output, error=error)
 
 
-PROJECT: Project = Project()
+PROJECT: Project  # initialized in startup event
+
+
+@app.on_event("startup")
+async def startup():
+    global PROJECT
+    PROJECT = Project(git_root=await get_git_root(), base_branch=await get_base_branch())
 
 
 @dataclass
@@ -341,7 +362,7 @@ def parse_check_output(raw: CheckResult) -> list[dict]:
 
 
 @app.get("/")
-def index(request: Request):
+async def index(request: Request):
     return templates.TemplateResponse(
         "index.html",
         {
@@ -356,9 +377,10 @@ async def diff(
     base: str | None = None,
     commit: str | None = None,
 ):
-    effective_branch = branch or PROJECT.get_current_branch()
+    current_branch = await PROJECT.get_current_branch()
+    effective_branch = branch or current_branch
     effective_base = base or PROJECT.base_branch
-    is_current_branch = effective_branch == PROJECT.get_current_branch()
+    is_current_branch = effective_branch == current_branch
 
     if commit == UNCOMMITTED and not is_current_branch:
         result = DiffResult(diff="", files=[])
@@ -369,7 +391,10 @@ async def diff(
     else:
         result = await PROJECT.get_branch_diff(effective_branch, effective_base)
 
-    commits = await PROJECT.get_commits(branch=effective_branch, base=effective_base)
+    commits, branches = await asyncio.gather(
+        PROJECT.get_commits(branch=effective_branch, base=effective_base),
+        PROJECT.get_branches(),
+    )
 
     response = DiffResponse(
         branch=effective_branch,
@@ -379,14 +404,10 @@ async def diff(
         is_current_branch=is_current_branch,
         diff=result.diff,
         files=result.files,
+        branches=branches,
+        current_branch=current_branch,
     )
     return asdict(response)
-
-
-@app.get("/api/branches")
-async def branches():
-    branches_list = await PROJECT.get_branches()
-    return {"branches": branches_list, "current": PROJECT.get_current_branch()}
 
 
 @app.get("/api/checks")

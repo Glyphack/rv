@@ -27,6 +27,8 @@ interface DiffResponse {
   is_current_branch: boolean;
   diff: string;
   files: string[];
+  branches: string[];
+  current_branch: string;
 }
 
 export default class ReviewController extends Controller {
@@ -57,7 +59,6 @@ export default class ReviewController extends Controller {
 
   async connect() {
     this.loadComments();
-    await this.loadBranches();
     await this.reloadReview();
 
     this.outputTarget.addEventListener("mousedown", (e) => {
@@ -121,6 +122,7 @@ export default class ReviewController extends Controller {
     diff2htmlUi.draw();
     this.renderFileExplorer(data.files);
     this.populateCommitSelect(data);
+    this.populateBranchSelects(data);
     this.loadComments();
     this.renderCommentsList();
   }
@@ -195,34 +197,38 @@ export default class ReviewController extends Controller {
     }, 2000);
   }
 
-  private async loadBranches() {
-    const res = await fetch("/api/branches");
-    const data = await res.json();
+  private populateBranchSelects(data: DiffResponse) {
+    const savedBranch = this.branchSelectTarget.value;
+    const savedBase = this.baseBranchSelectTarget.value;
 
-    const defaultOption = this.branchSelectTarget.options[0];
-    defaultOption.textContent = `${data.current} (current)`;
-
+    this.branchSelectTarget.innerHTML = "";
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.textContent = `${data.current_branch} (current)`;
+    this.branchSelectTarget.appendChild(defaultOption);
     for (const branch of data.branches) {
       const option = document.createElement("option");
       option.value = branch;
       option.textContent = branch;
       this.branchSelectTarget.appendChild(option);
     }
+    this.branchSelectTarget.value = savedBranch;
+
     const baseBranches = data.branches
-      .filter((branch: string) => branch !== data.current)
-      .sort((a: string, b: string) => a.localeCompare(b));
-    if (!this.baseBranchSelectTarget.options.length) {
-      const defaultOption = document.createElement("option");
-      defaultOption.value = "";
-      defaultOption.textContent = "Default (main/master)";
-      this.baseBranchSelectTarget.appendChild(defaultOption);
-    }
+      .filter((branch) => branch !== data.current_branch)
+      .sort((a, b) => a.localeCompare(b));
+    this.baseBranchSelectTarget.innerHTML = "";
+    const baseDefault = document.createElement("option");
+    baseDefault.value = "";
+    baseDefault.textContent = "Default (main/master)";
+    this.baseBranchSelectTarget.appendChild(baseDefault);
     for (const branch of baseBranches) {
       const option = document.createElement("option");
       option.value = branch;
       option.textContent = branch;
       this.baseBranchSelectTarget.appendChild(option);
     }
+    this.baseBranchSelectTarget.value = savedBase;
   }
 
   private populateCommitSelect(data: DiffResponse) {

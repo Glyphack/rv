@@ -25187,7 +25187,6 @@
     }
     async connect() {
       this.loadComments();
-      await this.loadBranches();
       await this.reloadReview();
       this.outputTarget.addEventListener("mousedown", (e) => {
         if (!(e.target instanceof HTMLElement)) return;
@@ -25237,6 +25236,7 @@
       diff2htmlUi.draw();
       this.renderFileExplorer(data.files);
       this.populateCommitSelect(data);
+      this.populateBranchSelects(data);
       this.loadComments();
       this.renderCommentsList();
     }
@@ -25302,30 +25302,34 @@ ${c.text}
         btn.disabled = false;
       }, 2e3);
     }
-    async loadBranches() {
-      const res = await fetch("/api/branches");
-      const data = await res.json();
-      const defaultOption = this.branchSelectTarget.options[0];
-      defaultOption.textContent = `${data.current} (current)`;
+    populateBranchSelects(data) {
+      const savedBranch = this.branchSelectTarget.value;
+      const savedBase = this.baseBranchSelectTarget.value;
+      this.branchSelectTarget.innerHTML = "";
+      const defaultOption = document.createElement("option");
+      defaultOption.value = "";
+      defaultOption.textContent = `${data.current_branch} (current)`;
+      this.branchSelectTarget.appendChild(defaultOption);
       for (const branch of data.branches) {
         const option = document.createElement("option");
         option.value = branch;
         option.textContent = branch;
         this.branchSelectTarget.appendChild(option);
       }
-      const baseBranches = data.branches.filter((branch) => branch !== data.current).sort((a, b) => a.localeCompare(b));
-      if (!this.baseBranchSelectTarget.options.length) {
-        const defaultOption2 = document.createElement("option");
-        defaultOption2.value = "";
-        defaultOption2.textContent = "Default (main/master)";
-        this.baseBranchSelectTarget.appendChild(defaultOption2);
-      }
+      this.branchSelectTarget.value = savedBranch;
+      const baseBranches = data.branches.filter((branch) => branch !== data.current_branch).sort((a, b) => a.localeCompare(b));
+      this.baseBranchSelectTarget.innerHTML = "";
+      const baseDefault = document.createElement("option");
+      baseDefault.value = "";
+      baseDefault.textContent = "Default (main/master)";
+      this.baseBranchSelectTarget.appendChild(baseDefault);
       for (const branch of baseBranches) {
         const option = document.createElement("option");
         option.value = branch;
         option.textContent = branch;
         this.baseBranchSelectTarget.appendChild(option);
       }
+      this.baseBranchSelectTarget.value = savedBase;
     }
     populateCommitSelect(data) {
       const savedValue = this.commitSelectTarget.value;
