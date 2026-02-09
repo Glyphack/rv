@@ -1,5 +1,5 @@
 {
-  "name": "rv-frontend",
+  "name": "towelie-frontend",
   "private": true,
   "type": "module",
   "dependencies": {
@@ -12,8 +12,8 @@
     "tailwindcss": "^4.1.18"
   },
   "scripts": {
-    "build": "esbuild web/src/main.ts --bundle --outfile=./src/rv/static/bundle.js",
-    "watch": "esbuild web/src/main.ts --bundle --outfile=./src/rv/static/bundle.js --watch"
+    "build": "esbuild web/src/main.ts --bundle --outfile=./src/towelie/static/bundle.js",
+    "watch": "esbuild web/src/main.ts --bundle --outfile=./src/towelie/static/bundle.js --watch"
   },
   "devDependencies": {
     "prettier": "3.8.1",

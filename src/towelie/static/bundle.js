@@ -25127,6 +25127,9 @@
     static {
       this.targets = ["status", "output"];
     }
+    connect() {
+      this.refresh();
+    }
     async refresh() {
       this.statusTarget.textContent = "loading\u2026";
       this.outputTarget.textContent = "";
@@ -25186,7 +25189,7 @@
       };
     }
     static {
-      this.STORAGE_KEY = "rv-comments";
+      this.STORAGE_KEY = "towelie-comments";
     }
     diffValueChanged() {
       this.outputTarget.innerHTML = "";
@@ -25532,17 +25535,17 @@ ${c.text}
       nav.appendChild(container);
     }
     renderCommentsList() {
-      this.outputTarget.querySelectorAll(".rv-comment-btn").forEach((el) => {
+      this.outputTarget.querySelectorAll(".towelie-comment-btn").forEach((el) => {
         if (el.tagName === "TR") {
           el.querySelectorAll(".d2h-code-side-linenumber").forEach((ln) => {
             ln.style.backgroundColor = "";
           });
-          el.classList.remove("rv-comment-btn");
+          el.classList.remove("towelie-comment-btn");
         } else {
           el.remove();
         }
       });
-      this.outputTarget.querySelectorAll(".rv-comment-popup").forEach((popup) => popup.remove());
+      this.outputTarget.querySelectorAll(".towelie-comment-popup").forEach((popup) => popup.remove());
       const currentBranch = this.branchSelectTarget.value || "current";
       const filteredComments = this.comments.filter(
         (c) => c.branch === currentBranch
@@ -25576,25 +25579,25 @@ ${c.text}
             if (isNaN(num) || num < startLine || num > endLine) continue;
             const row = lineEl.closest("tr");
             if (!row) continue;
-            row.classList.add("rv-comment-btn");
+            row.classList.add("towelie-comment-btn");
             lineEl.style.backgroundColor = "rgba(250, 204, 21, 0.15)";
             if (!firstRow) firstRow = row;
           }
           if (!firstRow) continue;
           firstRow.style.position = "relative";
           const btn = document.createElement("button");
-          btn.className = "rv-comment-btn absolute -left-1 top-0 w-5 h-5 rounded-full bg-yellow-400 text-[10px] leading-5 text-center cursor-pointer hover:bg-yellow-500 z-10";
+          btn.className = "towelie-comment-btn absolute -left-1 top-0 w-5 h-5 rounded-full bg-yellow-400 text-[10px] leading-5 text-center cursor-pointer hover:bg-yellow-500 z-10";
           btn.textContent = "\u{1F4AC}";
           btn.title = comment.text;
           btn.addEventListener("click", (e) => {
             e.stopPropagation();
-            const existing = firstRow.querySelector(".rv-comment-popup");
+            const existing = firstRow.querySelector(".towelie-comment-popup");
             if (existing) {
               existing.remove();
               return;
             }
             const popup = document.createElement("div");
-            popup.className = "rv-comment-popup absolute left-6 top-0 w-64 p-2 bg-white border border-gray-300 rounded shadow-lg text-sm z-20";
+            popup.className = "towelie-comment-popup absolute left-6 top-0 w-64 p-2 bg-white border border-gray-300 rounded shadow-lg text-sm z-20";
             popup.addEventListener("click", (ev) => ev.stopPropagation());
             const textEl = document.createElement("p");
             textEl.textContent = comment.text;

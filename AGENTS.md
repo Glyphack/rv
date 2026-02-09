@@ -1,6 +1,6 @@
 ## Commands
 
-`uv run rv`: Runs the project and builds frontend. It runs in watch mode.
+`uv run towelie`: Runs the project and builds frontend. It runs in watch mode.
 
 ## Coding rules
 

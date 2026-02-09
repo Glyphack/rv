@@ -55,7 +55,7 @@ export default class ReviewController extends Controller {
   declare diffValue: DiffResponse;
   declare sidebarVisibleValue: boolean;
 
-  private static STORAGE_KEY = "rv-comments";
+  private static STORAGE_KEY = "towelie-comments";
 
   comments: Comment[] = [];
   private activeForm: HTMLElement | null = null;
@@ -474,18 +474,18 @@ export default class ReviewController extends Controller {
   }
 
   private renderCommentsList() {
-    this.outputTarget.querySelectorAll(".rv-comment-btn").forEach((el) => {
+    this.outputTarget.querySelectorAll(".towelie-comment-btn").forEach((el) => {
       if (el.tagName === "TR") {
         el.querySelectorAll(".d2h-code-side-linenumber").forEach((ln) => {
           (ln as HTMLElement).style.backgroundColor = "";
         });
-        el.classList.remove("rv-comment-btn");
+        el.classList.remove("towelie-comment-btn");
       } else {
         el.remove();
       }
     });
     this.outputTarget
-      .querySelectorAll(".rv-comment-popup")
+      .querySelectorAll(".towelie-comment-popup")
       .forEach((popup) => popup.remove());
 
     const currentBranch = this.branchSelectTarget.value || "current";
@@ -530,7 +530,7 @@ export default class ReviewController extends Controller {
           const row = (lineEl as HTMLElement).closest("tr") as HTMLElement;
           if (!row) continue;
 
-          row.classList.add("rv-comment-btn");
+          row.classList.add("towelie-comment-btn");
           (lineEl as HTMLElement).style.backgroundColor =
             "rgba(250, 204, 21, 0.15)";
 
@@ -542,20 +542,20 @@ export default class ReviewController extends Controller {
 
         const btn = document.createElement("button");
         btn.className =
-          "rv-comment-btn absolute -left-1 top-0 w-5 h-5 rounded-full bg-yellow-400 text-[10px] leading-5 text-center cursor-pointer hover:bg-yellow-500 z-10";
+          "towelie-comment-btn absolute -left-1 top-0 w-5 h-5 rounded-full bg-yellow-400 text-[10px] leading-5 text-center cursor-pointer hover:bg-yellow-500 z-10";
         btn.textContent = "💬";
         btn.title = comment.text;
 
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
-          const existing = firstRow!.querySelector(".rv-comment-popup");
+          const existing = firstRow!.querySelector(".towelie-comment-popup");
           if (existing) {
             existing.remove();
             return;
           }
           const popup = document.createElement("div");
           popup.className =
-            "rv-comment-popup absolute left-6 top-0 w-64 p-2 bg-white border border-gray-300 rounded shadow-lg text-sm z-20";
+            "towelie-comment-popup absolute left-6 top-0 w-64 p-2 bg-white border border-gray-300 rounded shadow-lg text-sm z-20";
           popup.addEventListener("click", (ev) => ev.stopPropagation());
 
           const textEl = document.createElement("p");

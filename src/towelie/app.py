@@ -233,7 +233,6 @@ def index(request: Request):
         "index.html",
         {
             "request": request,
-            "checks": PROJECT.run_checks(),
         },
     )
 
