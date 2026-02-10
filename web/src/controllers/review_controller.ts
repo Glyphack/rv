@@ -159,7 +159,7 @@ function renderTreeLevel(
 
     const label = document.createElement("span");
     label.className =
-      "flex items-center gap-1 py-0.5 text-xs font-medium text-gray-500";
+      "flex items-center text-[10px] font-medium uppercase tracking-wide text-gray-400 gap-1.5 py-1";
     label.textContent = `📁 ${name}`;
     folderEl.appendChild(label);
 
@@ -173,7 +173,7 @@ function renderTreeLevel(
 
     const a = document.createElement("a");
     a.className =
-      "block truncate rounded px-1 py-0.5 text-xs text-gray-700 hover:bg-gray-100";
+      "block truncate rounded-md px-2 py-1 text-xs text-gray-600 transition-colors hover:text-gray-900 hover:bg-gray-50";
     a.textContent = name;
 
     const hash = hrefMap.get(fullPath);
@@ -192,7 +192,7 @@ function renderFileTree(
   container.innerHTML = "";
 
   const title = document.createElement("h3");
-  title.className = "mb-2 text-sm font-semibold text-gray-700";
+  title.className = "text-[10px] font-medium uppercase tracking-wide text-gray-400 mb-3 mt-1";
   title.textContent = "Files";
   container.appendChild(title);
 
@@ -295,7 +295,7 @@ function renderCommentIndicators(
 
       const btn = document.createElement("button");
       btn.className =
-        "towelie-comment-btn absolute -left-1 top-0 w-5 h-5 rounded-full bg-yellow-400 text-[10px] leading-5 text-center cursor-pointer hover:bg-yellow-500 z-10";
+        "towelie-comment-btn absolute -left-1 top-0 w-5 h-5 rounded-full bg-amber-400 shadow-sm text-[10px] leading-5 text-center cursor-pointer transition-colors hover:bg-amber-500 z-10";
       btn.textContent = "💬";
       btn.title = comment.text;
 
@@ -308,7 +308,7 @@ function renderCommentIndicators(
         }
         const popup = document.createElement("div");
         popup.className =
-          "towelie-comment-popup absolute left-6 top-0 w-64 p-2 bg-white border border-gray-300 rounded shadow-lg text-sm z-20";
+          "towelie-comment-popup absolute left-6 top-0 w-72 rounded-xl border border-gray-100 p-3 bg-white shadow-xl text-sm z-20";
         popup.addEventListener("click", (ev) => ev.stopPropagation());
 
         const textEl = document.createElement("p");
@@ -317,7 +317,7 @@ function renderCommentIndicators(
 
         const deleteBtn = document.createElement("button");
         deleteBtn.className =
-          "mt-2 rounded bg-red-500 px-2 py-0.5 text-xs text-white hover:bg-red-600";
+          "mt-2 rounded-md bg-red-50 px-2 py-0.5 text-xs text-red-600 hover:bg-red-100";
         deleteBtn.textContent = "Delete";
         deleteBtn.addEventListener("click", () => onDelete(comment));
         popup.appendChild(deleteBtn);
@@ -344,25 +344,26 @@ function showInlineCommentForm(
 
   const form = document.createElement("tr");
   form.innerHTML = `
-    <td colspan="99" class="p-2 bg-yellow-50 border border-yellow-200">
-      <div class="flex flex-col gap-2">
+    <td colspan="99" class="bg-gray-50 border border-gray-100">
+      <div class="sticky left-0 flex flex-col gap-2 p-3">
         <span class="text-xs text-gray-500">${fileName} (${diffSide}) : ${startLine}-${endLine}</span>
         <textarea
-          class="w-full rounded border border-gray-300 p-2 text-sm"
+          class="w-full rounded-lg border border-gray-200 p-2 text-sm shadow-sm focus:ring-2 focus:ring-gray-200 focus:outline-none"
           rows="3"
           placeholder="Write a comment..."
+          style="overflow-wrap: break-word; word-break: break-word;"
         ></textarea>
         <div class="flex gap-2">
           <button
             type="button"
-            class="rounded bg-blue-500 px-3 py-1 text-sm text-white hover:bg-blue-600"
+            class="rounded-lg bg-gray-900 px-3 py-1 text-sm text-white hover:bg-gray-800"
             data-action="submit"
           >
             Comment
           </button>
           <button
             type="button"
-            class="rounded bg-gray-200 px-3 py-1 text-sm hover:bg-gray-300"
+            class="rounded-lg bg-white ring-1 ring-gray-200 px-3 py-1 text-sm hover:bg-gray-50"
             data-action="cancel"
           >
             Cancel
@@ -390,6 +391,13 @@ function showInlineCommentForm(
     });
 
   anchor.insertAdjacentElement("afterend", form);
+
+  const scrollParent = form.closest(".d2h-file-side-diff") as HTMLElement | null;
+  const innerDiv = form.querySelector("div")!;
+  if (scrollParent) {
+    innerDiv.style.width = `${scrollParent.clientWidth - 24}px`;
+  }
+
   form.querySelector("textarea")!.focus();
   return form;
 }
@@ -516,12 +524,13 @@ export default class ReviewController extends Controller {
 
   toggleSidebar() {
     this.sidebarVisible = !this.sidebarVisible;
+    const svg = this.sidebarToggleTarget.querySelector("svg");
     if (this.sidebarVisible) {
       this.sidebarTarget.style.display = "";
-      this.sidebarToggleTarget.textContent = "◀";
+      if (svg) svg.style.transform = "";
     } else {
       this.sidebarTarget.style.display = "none";
-      this.sidebarToggleTarget.textContent = "▶";
+      if (svg) svg.style.transform = "scaleX(-1)";
     }
   }
 

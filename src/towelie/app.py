@@ -351,13 +351,26 @@ class CheckResult:
 
 
 def parse_check_output(raw: CheckResult) -> list[dict]:
-    results: list[dict] = []
-    output = raw.output
-    for line in output.splitlines():
-        name = line.strip()
-        if not name:
+    if raw.status == CheckStatus.NO_CHECKS:
+        return []
+
+    results = []
+    for line in raw.output.splitlines():
+        line = line.strip()
+        if not line:
             continue
-        results.append({"name": name, "passed": raw.status == CheckStatus.PASS})
+
+        # Parse lines like "build-frontend...........Passed"
+        if "." in line:
+            # Split on dots and find where the status word starts
+            parts = line.split(".")
+            name = parts[0].strip()
+            # The status is at the end after all the dots
+            status_part = line.split(".")[-1].strip()
+            passed = "pass" in status_part.lower()
+            if name:
+                results.append({"name": name, "passed": passed})
+
     return results
 
 
@@ -413,6 +426,8 @@ async def diff(
 @app.get("/api/checks")
 async def checks():
     results = await PROJECT.run_checks()
-    d = asdict(results)
-    d["status"] = results.status.value
-    return d
+    return {
+        "status": results.status.value,
+        "checks": parse_check_output(results),
+        "error": results.error
+    }

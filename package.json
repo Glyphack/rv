@@ -12,11 +12,15 @@
     "tailwindcss": "^4.1.18"
   },
   "scripts": {
-    "build": "esbuild web/src/main.ts --bundle --outfile=./src/towelie/static/bundle.js",
-    "watch": "esbuild web/src/main.ts --bundle --outfile=./src/towelie/static/bundle.js --watch"
+    "build": "bunx esbuild web/src/main.ts --bundle --outfile=./src/towelie/static/bundle.js",
+    "watch": "bunx esbuild web/src/main.ts --bundle --outfile=./src/towelie/static/bundle.js --watch"
   },
   "devDependencies": {
     "prettier": "3.8.1",
-    "prettier-plugin-tailwindcss": "^0.7.2"
+    "prettier-plugin-tailwindcss": "^0.7.2",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
   }
 }

@@ -19,26 +19,34 @@ export default class ChecksController extends Controller {
       const data = await res.json();
       this.statusTarget.textContent = data.status;
       this.statusTarget.className = this.statusClasses(data.status);
-      if (data.output) {
-        this.outputTarget.textContent = data.output;
+
+      let output = "";
+      if (data.checks && data.checks.length > 0) {
+        output = data.checks
+          .map((check: any) => `${check.passed ? "✓" : "✗"} ${check.name}`)
+          .join("\n");
       }
+
       if (data.error) {
-        this.outputTarget.textContent = data.error;
+        if (output) output += "\n\n─── Error Details ───\n";
+        output += data.error;
       }
+
+      this.outputTarget.textContent = output;
     } catch {
       this.statusTarget.textContent = "error";
-      this.statusTarget.className = "text-sm font-semibold text-red-500";
+      this.statusTarget.className = "text-xs font-medium text-red-500";
     }
   }
 
   private statusClasses(status: string): string {
     switch (status) {
       case "pass":
-        return "text-sm font-semibold text-green-600";
+        return "text-xs font-medium text-emerald-600";
       case "fail":
-        return "text-sm font-semibold text-red-500";
+        return "text-xs font-medium text-red-500";
       default:
-        return "text-sm font-semibold text-gray-500";
+        return "text-xs font-medium text-gray-400";
     }
   }
 }
