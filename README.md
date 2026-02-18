@@ -4,6 +4,8 @@ Local code review tool. Fast, easy and without clutter.
 
 ## Usage
 
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/).
+
 ```bash
 uvx towelie
 ```
