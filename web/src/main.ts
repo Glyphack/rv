@@ -1,6 +1,7 @@
 import { Application } from "@hotwired/stimulus";
 
 import ChecksController from "./controllers/checks_controller";
+import OptionsController from "./controllers/options_controller";
 import ReviewController from "./controllers/review_controller";
 
 declare global {
@@ -11,4 +12,5 @@ declare global {
 
 window.Stimulus = Application.start();
 window.Stimulus.register("checks", ChecksController);
+window.Stimulus.register("options", OptionsController);
 window.Stimulus.register("review", ReviewController);

@@ -4,7 +4,7 @@ repos:
       - id: build-frontend
         name: build-frontend
         language: system
-        entry: bash -c 'npm run build && npx @tailwindcss/cli -i src/towelie/static/input.css -o src/towelie/static/output.css && git add src/towelie/static/bundle.js src/towelie/static/output.css'
+        entry: bash -c 'npm run build && git add src/towelie/static/'
         always_run: true
         pass_filenames: false
         stages: [commit]
@@ -14,9 +14,3 @@ repos:
         entry: uv run pyright
         types: [python]
         pass_filenames: false
-      # - id: pytest
-      #   name: pytest
-      #   language: system
-      #   entry: uv run pytest
-      #   always_run: true
-      #   pass_filenames: false

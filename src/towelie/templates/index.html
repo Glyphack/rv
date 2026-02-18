@@ -1,135 +1,128 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ project_name }} - towelie</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="/static/output.css" />
-    <link rel="stylesheet" href="/static/bundle.css" />
-  </head>
-  <body class="bg-gray-50">
-    <div class="flex min-h-screen flex-col" data-controller="review">
-      <div
-        class="sticky top-0 z-10 flex h-12 items-center border-b border-gray-100 bg-white px-4 shadow-sm"
+{% extends "base.html" %} {% block title %}{{ view.project_name }} - towelie{%
+endblock %} {% block body %}
+<div class="flex min-h-screen flex-col" data-controller="review">
+  <div
+    class="sticky top-0 z-10 flex h-12 items-center border-b border-gray-100 bg-white px-4 shadow-sm"
+  >
+    <span class="text-sm font-semibold text-gray-900">towelie</span>
+    <span
+      class="ml-2 rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-medium tracking-wide text-gray-500 uppercase"
+      >code review</span
+    >
+    <a
+      href="/options"
+      class="ml-auto rounded-md px-2 py-1 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
+      >Options</a
+    >
+  </div>
+  <div class="flex flex-1">
+    <div class="sticky top-12 flex h-[calc(100vh-3rem)] shrink-0 self-start">
+      <button
+        class="flex items-center self-stretch px-1 text-gray-300 transition-colors hover:bg-gray-50 hover:text-gray-500"
+        type="button"
+        data-action="review#toggleSidebar"
+        data-review-target="sidebarToggle"
       >
-        <span class="text-sm font-semibold text-gray-900">towelie</span>
-        <span
-          class="ml-2 rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-medium tracking-wide text-gray-500 uppercase"
-          >code review</span
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#9ca3af"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
         >
-      </div>
-      <div class="flex flex-1">
-        <div class="sticky top-12 flex h-[calc(100vh-3rem)] shrink-0 self-start">
-          <button
-            class="flex items-center self-stretch px-1 text-gray-300 transition-colors hover:bg-gray-50 hover:text-gray-500"
-            type="button"
-            data-action="review#toggleSidebar"
-            data-review-target="sidebarToggle"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#9ca3af"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+      <nav
+        class="flex w-64 shrink-0 flex-col bg-white shadow-[1px_0_3px_0_rgba(0,0,0,0.04)]"
+        data-review-target="sidebar"
+      >
+        <div class="flex-1 overflow-y-auto p-4">
+          <div class="mb-3 flex flex-col gap-1" data-controller="checks">
+            <div
+              class="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-1.5 text-xs"
             >
-              <polyline points="15 18 9 12 15 6"></polyline>
-            </svg>
-          </button>
-          <nav
-            class="flex w-64 shrink-0 flex-col bg-white shadow-[1px_0_3px_0_rgba(0,0,0,0.04)]"
-            data-review-target="sidebar"
-          >
-            <div class="flex-1 overflow-y-auto p-4">
-              <div class="mb-3 flex flex-col gap-1" data-controller="checks">
-                <div
-                  class="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-1.5 text-xs"
-                >
-                  <span
-                    class="text-[10px] font-medium tracking-wide text-gray-500 uppercase"
-                    >Checks</span
-                  >
-                  <span data-checks-target="status" class="text-gray-500">
-                    loading…
-                  </span>
-                  <button
-                    class="ml-auto text-gray-400 transition-colors hover:text-gray-600"
-                    type="button"
-                    data-action="checks#refresh"
-                  >
-                    ↻
-                  </button>
-                </div>
-                <pre
-                  data-checks-target="output"
-                  class="max-h-32 overflow-y-auto rounded-lg bg-gray-50 p-2 text-xs whitespace-pre-wrap text-gray-600 empty:hidden"
-                ></pre>
-              </div>
-              <div class="flex flex-col gap-4">
-                <div class="flex flex-col gap-2">
-                  <label
-                    class="text-[10px] font-medium tracking-wide text-gray-400 uppercase"
-                    >Branch</label
-                  >
-                  <select
-                    data-review-target="branchSelect"
-                    data-action="change->review#branchChanged"
-                    class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-gray-300 focus:ring-2 focus:ring-gray-200 focus:outline-none"
-                  >
-                    <option value="">Current branch</option>
-                  </select>
-                </div>
-                <div class="flex flex-col gap-2">
-                  <label
-                    class="text-[10px] font-medium tracking-wide text-gray-400 uppercase"
-                    >Base branch</label
-                  >
-                  <select
-                    data-review-target="baseBranchSelect"
-                    data-action="change->review#branchChanged"
-                    class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-gray-300 focus:ring-2 focus:ring-gray-200 focus:outline-none"
-                  ></select>
-                </div>
-                <div class="flex flex-col gap-2">
-                  <label
-                    class="text-[10px] font-medium tracking-wide text-gray-400 uppercase"
-                    >Commit</label
-                  >
-                  <select
-                    data-review-target="commitSelect"
-                    data-action="change->review#reloadReview"
-                    class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-gray-300 focus:ring-2 focus:ring-gray-200 focus:outline-none"
-                  ></select>
-                </div>
-                <div data-review-target="fileExplorer"></div>
-              </div>
-            </div>
-            <div class="border-t border-gray-100 p-4">
-              <button
-                class="w-full rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-medium text-white transition-all hover:bg-emerald-700 hover:shadow-md focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 active:bg-emerald-800"
-                type="button"
-                data-action="review#finishReview"
+              <span
+                class="text-[10px] font-medium tracking-wide text-gray-500 uppercase"
+                >Checks</span
               >
-                Finish review
+              <span data-checks-target="status" class="text-gray-500">
+                loading…
+              </span>
+              <button
+                class="ml-auto text-[10px] font-medium text-gray-400 transition-colors hover:text-gray-600"
+                type="button"
+                data-action="checks#copyOutput"
+              >
+                Copy
+              </button>
+              <button
+                class="text-gray-400 transition-colors hover:text-gray-600"
+                type="button"
+                data-action="checks#refresh"
+              >
+                ↻
               </button>
             </div>
-          </nav>
+            <pre
+              data-checks-target="output"
+              class="max-h-32 overflow-y-auto rounded-lg bg-gray-50 p-2 text-xs whitespace-pre-wrap text-gray-600 empty:hidden"
+            ></pre>
+          </div>
+          <div class="flex flex-col gap-4">
+            <div class="flex flex-col gap-2">
+              <label
+                class="text-[10px] font-medium tracking-wide text-gray-400 uppercase"
+                >Branch</label
+              >
+              <select
+                data-action="review#reloadReview"
+                data-review-target="branchSelect"
+                class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-gray-300 focus:ring-2 focus:ring-gray-200 focus:outline-none"
+              >
+                <option value="">Current branch</option>
+              </select>
+            </div>
+            <div class="flex flex-col gap-2">
+              <label
+                class="text-[10px] font-medium tracking-wide text-gray-400 uppercase"
+                >Base branch</label
+              >
+              <select
+                data-action="review#reloadReview"
+                data-review-target="baseBranchSelect"
+                class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-gray-300 focus:ring-2 focus:ring-gray-200 focus:outline-none"
+              ></select>
+            </div>
+            <div class="flex flex-col gap-2">
+              <label
+                class="text-[10px] font-medium tracking-wide text-gray-400 uppercase"
+                >Commit</label
+              >
+              <select
+                data-action="review#reloadReview"
+                data-review-target="commitSelect"
+                class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-gray-300 focus:ring-2 focus:ring-gray-200 focus:outline-none"
+              ></select>
+            </div>
+            <div data-review-target="fileExplorer"></div>
+          </div>
         </div>
-        <div
-          class="min-w-0 flex-1 bg-white"
-          data-review-target="output"
-        ></div>
-      </div>
+        <div class="border-t border-gray-100 p-4">
+          <button
+            class="w-full rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-medium text-white transition-all hover:bg-emerald-700 hover:shadow-md focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 active:bg-emerald-800"
+            type="button"
+            data-action="review#finishReview"
+          >
+            Finish review
+          </button>
+        </div>
+      </nav>
     </div>
-    <script src="/static/bundle.js"></script>
-  </body>
-</html>
+    <div class="min-w-0 flex-1 bg-white" data-review-target="output"></div>
+  </div>
+</div>
+{% endblock %}
