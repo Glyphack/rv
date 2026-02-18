@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import sys
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -42,6 +42,8 @@ class CheckCommand:
 
 ALL_CHANGES = "__all__"
 UNCOMMITTED = "__uncommitted__"
+STAGED = "__staged__"
+UNSTAGED = "__unstaged__"
 
 
 @dataclass
@@ -127,6 +129,56 @@ class Project:
             if f:
                 files.add(f)
         return Diff(diff=diff_out.decode(), files=sorted(files))
+
+    async def get_staged_diff(self) -> Diff:
+        _log_cmd(["git", "diff", "--cached", "--unified=10"])
+        diff_proc = await asyncio.create_subprocess_exec(
+            "git",
+            "diff",
+            "--cached",
+            "--unified=10",
+            cwd=self.git_root,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _log_cmd(["git", "diff", "--cached", "--name-only"])
+        files_proc = await asyncio.create_subprocess_exec(
+            "git",
+            "diff",
+            "--cached",
+            "--name-only",
+            cwd=self.git_root,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        diff_out, _ = await diff_proc.communicate()
+        files_out, _ = await files_proc.communicate()
+        files = [f for f in files_out.decode().strip().split("\n") if f]
+        return Diff(diff=diff_out.decode(), files=files)
+
+    async def get_unstaged_diff(self) -> Diff:
+        _log_cmd(["git", "diff", "--unified=10"])
+        diff_proc = await asyncio.create_subprocess_exec(
+            "git",
+            "diff",
+            "--unified=10",
+            cwd=self.git_root,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _log_cmd(["git", "diff", "--name-only"])
+        files_proc = await asyncio.create_subprocess_exec(
+            "git",
+            "diff",
+            "--name-only",
+            cwd=self.git_root,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        diff_out, _ = await diff_proc.communicate()
+        files_out, _ = await files_proc.communicate()
+        files = [f for f in files_out.decode().strip().split("\n") if f]
+        return Diff(diff=diff_out.decode(), files=files)
 
     async def get_commit_diff(self, commit: str) -> Diff:
         _log_cmd(["git", "diff", f"{commit}^", commit, "--unified=10"])
@@ -235,14 +287,16 @@ class Project:
         base: str,
     ) -> list[CommitInfo]:
         is_current = branch == await self.get_current_branch()
-        if is_current:
-            all_label = "All changes (committed + uncommitted)"
-        else:
-            all_label = "All commits (branch diff)"
-        commits: list[CommitInfo] = [CommitInfo(hash="", label=all_label)]
+        commits: list[CommitInfo] = [CommitInfo(hash=ALL_CHANGES, label="All changes")]
         if is_current:
             commits.append(
-                CommitInfo(hash=UNCOMMITTED, label="Uncommitted changes only")
+                CommitInfo(hash=STAGED, label="Staged changes")
+            )
+            commits.append(
+                CommitInfo(hash=UNSTAGED, label="Unstaged changes")
+            )
+            commits.append(
+                CommitInfo(hash=UNCOMMITTED, label="Staged + unstaged")
             )
         _log_cmd(["git", "log", f"{base}..{branch}", "--pretty=format:%H%x00%s"])
         proc = await asyncio.create_subprocess_exec(
@@ -447,16 +501,23 @@ async def diff(
     effective_base = base or await APP_CONTEXT.project.get_base_branch()
     is_current_branch = effective_branch == current_branch
 
-    if commit == UNCOMMITTED and not is_current_branch:
-        result = Diff(diff="", files=[])
+    if commit in (UNCOMMITTED, STAGED, UNSTAGED) and not is_current_branch:
+        raise HTTPException(
+            status_code=400,
+            detail="Staged/unstaged/uncommitted filters are only available for the current branch",
+        )
     elif commit == UNCOMMITTED:
         result = await APP_CONTEXT.project.get_uncommitted_diff()
-    elif commit:
-        result = await APP_CONTEXT.project.get_commit_diff(commit)
-    else:
+    elif commit == STAGED:
+        result = await APP_CONTEXT.project.get_staged_diff()
+    elif commit == UNSTAGED:
+        result = await APP_CONTEXT.project.get_unstaged_diff()
+    elif not commit or commit == ALL_CHANGES:
         result = await APP_CONTEXT.project.get_branch_diff(
             effective_branch, effective_base
         )
+    else:
+        result = await APP_CONTEXT.project.get_commit_diff(commit)
 
     response = DiffResponse(diff=result)
     return response

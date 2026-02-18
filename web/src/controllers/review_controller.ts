@@ -551,11 +551,6 @@ export default class ReviewController extends Controller {
     const commits = selectedBranch?.commits ?? [];
 
     commitSelect.innerHTML = "";
-    const defaultCommitOption = document.createElement("option");
-    defaultCommitOption.value = "";
-    defaultCommitOption.textContent = "All changes";
-    commitSelect.appendChild(defaultCommitOption);
-
     commits.forEach((commit) => {
       const option = document.createElement("option");
       option.value = commit.hash;
@@ -565,7 +560,9 @@ export default class ReviewController extends Controller {
 
     commitSelect.value = commits.some((commit) => commit.hash === savedCommit)
       ? savedCommit
-      : "";
+      : commits.length > 0
+        ? commits[0].hash
+        : "";
 
     return info;
   }
