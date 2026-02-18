@@ -14,5 +14,7 @@ const { values, positionals } = parseArgs({
 
 const v = values.version;
 
-await $`git tag -a ${v} -m 0.1.1`;
+await $`git tag -d ${v}`;
+await $`git push origin --delete ${v}`;
+await $`git tag -a ${v} -m ${v}`;
 await $`git push --tags`;

@@ -31,7 +31,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add pyproject.toml
           git diff --cached --quiet || git commit -m "chore: bump version to ${GITHUB_REF_NAME}"
-          git push origin main
+          git push origin master
       - name: Build
         run: |
           bun run build
