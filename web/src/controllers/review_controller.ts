@@ -1,5 +1,7 @@
 import { Controller } from "@hotwired/stimulus";
 import { Diff2HtmlUI } from "diff2html/lib/ui/js/diff2html-ui-slim.js";
+import { getDiff, getInfo, getOptions } from "../api";
+import "../comment.css";
 
 enum DiffSide {
   Old = "old",
@@ -19,19 +21,41 @@ interface Comment {
   branch: string;
 }
 
-interface DiffResponse {
-  branch: string;
-  base_branch: string;
-  commits: Array<{ hash: string; label: string }>;
-  selected_commit: string;
-  is_current_branch: boolean;
-  diff: string;
-  files: string[];
-  branches: string[];
-  current_branch: string;
+interface SelectionState {
+  start: Selection | null;
+  rows: Set<HTMLElement>;
+  row: HTMLElement | null;
+  selecting: boolean;
+  hadStart: boolean;
+  didDrag: boolean;
 }
 
+interface LineLocation {
+  fileName: string;
+  diffSide: DiffSide;
+  lineNumber: number;
+}
 
+interface LineContext {
+  location: LineLocation;
+  row: HTMLElement;
+}
+
+function applyPromptTemplate(
+  template: string,
+  values: { comments: string; branch: string; comment_count: string },
+): string {
+  const replaceToken = (source: string, token: string, value: string): string =>
+    source.split(token).join(value);
+
+  let result = template;
+  result = replaceToken(result, "{{comments}}", values.comments);
+  result = replaceToken(result, "{{branch}}", values.branch);
+  result = replaceToken(result, "{{comment_count}}", values.comment_count);
+  return result;
+}
+
+// Temporarily changes button text and disables it, then restores original state after delay
 function flashButton(btn: HTMLButtonElement, message: string, ms: number) {
   const original = btn.textContent;
   btn.textContent = message;
@@ -85,102 +109,103 @@ class CommentStorage {
   }
 }
 
-function populateBranchSelects(
-  branchSelect: HTMLSelectElement,
-  baseBranchSelect: HTMLSelectElement,
-  data: DiffResponse,
-) {
-  const savedBranch = branchSelect.value;
-  const savedBase = baseBranchSelect.value;
+type FileTree = Map<string, string | FileTree>;
 
-  branchSelect.innerHTML = "";
-  const defaultOption = document.createElement("option");
-  defaultOption.value = "";
-  defaultOption.textContent = `${data.current_branch} (current)`;
-  branchSelect.appendChild(defaultOption);
-  for (const branch of data.branches) {
-    const option = document.createElement("option");
-    option.value = branch;
-    option.textContent = branch;
-    branchSelect.appendChild(option);
+function el<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  attrs: Omit<Partial<HTMLElementTagNameMap[K]>, "style"> & {
+    style?: Partial<CSSStyleDeclaration>;
+  },
+  children?: (HTMLElement | string)[],
+): HTMLElementTagNameMap[K] {
+  const element = document.createElement(tag);
+  const { style, ...rest } = attrs;
+  Object.assign(element, rest);
+  if (style) Object.assign(element.style, style);
+  for (const child of children ?? []) {
+    if (typeof child === "string") {
+      element.appendChild(document.createTextNode(child));
+    } else {
+      element.appendChild(child);
+    }
   }
-  branchSelect.value = savedBranch;
-
-  const baseBranches = data.branches
-    .filter((branch) => branch !== data.current_branch)
-    .sort((a, b) => a.localeCompare(b));
-  baseBranchSelect.innerHTML = "";
-  const baseDefault = document.createElement("option");
-  baseDefault.value = "";
-  baseDefault.textContent = "Default (main/master)";
-  baseBranchSelect.appendChild(baseDefault);
-  for (const branch of baseBranches) {
-    const option = document.createElement("option");
-    option.value = branch;
-    option.textContent = branch;
-    baseBranchSelect.appendChild(option);
-  }
-  baseBranchSelect.value = savedBase;
+  return element;
 }
 
-function populateCommitSelect(
-  commitSelect: HTMLSelectElement,
-  data: DiffResponse,
-) {
-  const savedValue = commitSelect.value;
-  commitSelect.innerHTML = "";
+function buildHrefMap(outputEl: HTMLElement): Map<string, string> {
+  const hrefMap = new Map<string, string>();
+  outputEl
+    .querySelectorAll<HTMLAnchorElement>(".d2h-file-list a.d2h-file-name")
+    .forEach((a) => {
+      const name = a.textContent?.trim();
+      if (name && a.hash) hrefMap.set(name, a.hash);
+    });
+  return hrefMap;
+}
 
-  for (const commit of data.commits) {
-    const option = document.createElement("option");
-    option.value = commit.hash;
-    option.textContent = commit.label;
-    commitSelect.appendChild(option);
+function buildFileTree(files: string[]): FileTree {
+  const root: FileTree = new Map();
+  for (const file of files ?? []) {
+    const parts = file.split("/");
+    let current = root;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (i === parts.length - 1) {
+        current.set(part, file);
+      } else {
+        if (!current.has(part)) {
+          current.set(part, new Map());
+        }
+        current = current.get(part) as FileTree;
+      }
+    }
   }
-
-  const options = Array.from(commitSelect.options);
-  if (options.some((o) => o.value === savedValue)) {
-    commitSelect.value = savedValue;
-  }
+  return root;
 }
 
 function renderTreeLevel(
   parent: HTMLElement,
-  tree: Map<string, any>,
+  tree: FileTree,
   hrefMap: Map<string, string>,
   depth: number,
 ) {
   const entries = Array.from(tree.entries());
-  const folders = entries.filter(([, v]) => v instanceof Map);
-  const files = entries.filter(([, v]) => typeof v === "string");
+  const folders = entries.filter(([, v]) => v instanceof Map) as [
+    string,
+    FileTree,
+  ][];
+  const files = entries.filter(([, v]) => typeof v === "string") as [
+    string,
+    string,
+  ][];
+  const indent = { paddingLeft: `${depth * 12}px` };
 
   for (const [name, subtree] of folders) {
-    const folderEl = document.createElement("div");
-    folderEl.style.paddingLeft = `${depth * 12}px`;
-
-    const label = document.createElement("span");
-    label.className =
-      "flex items-center text-[10px] font-medium uppercase tracking-wide text-gray-400 gap-1.5 py-1";
-    label.textContent = `📁 ${name}`;
-    folderEl.appendChild(label);
-
-    parent.appendChild(folderEl);
+    parent.appendChild(
+      el("div", { style: indent }, [
+        el("span", {
+          className:
+            "flex items-center text-[10px] font-medium uppercase tracking-wide text-gray-400 gap-1.5 py-1",
+          textContent: `${name}`,
+        }),
+      ]),
+    );
     renderTreeLevel(parent, subtree, hrefMap, depth + 1);
   }
 
   for (const [name, fullPath] of files) {
-    const fileEl = document.createElement("div");
-    fileEl.style.paddingLeft = `${depth * 12}px`;
+    const link = el("a", {
+      className:
+        "block truncate rounded-md px-2 py-1 text-xs text-gray-600 transition-colors hover:text-gray-900 hover:bg-gray-50 flex-1",
+      textContent: name,
+      href: hrefMap.get(fullPath) ?? "",
+    });
 
-    const a = document.createElement("a");
-    a.className =
-      "block truncate rounded-md px-2 py-1 text-xs text-gray-600 transition-colors hover:text-gray-900 hover:bg-gray-50";
-    a.textContent = name;
-
-    const hash = hrefMap.get(fullPath);
-    if (hash) a.href = hash;
-
-    fileEl.appendChild(a);
-    parent.appendChild(fileEl);
+    parent.appendChild(
+      el("div", { className: "flex items-center gap-1 group", style: indent }, [
+        link,
+      ]),
+    );
   }
 }
 
@@ -191,47 +216,26 @@ function renderFileTree(
 ) {
   container.innerHTML = "";
 
-  const title = document.createElement("h3");
-  title.className = "text-[10px] font-medium uppercase tracking-wide text-gray-400 mb-3 mt-1";
-  title.textContent = "Files";
-  container.appendChild(title);
+  const hrefMap = buildHrefMap(outputEl);
+  const tree = buildFileTree(files);
 
-  const fileLinks = outputEl.querySelectorAll<HTMLAnchorElement>(
-    ".d2h-file-list a.d2h-file-name",
+  const treeContainer = el("div", { className: "flex flex-col" });
+  renderTreeLevel(treeContainer, tree, hrefMap, 0);
+
+  container.appendChild(
+    el("h3", {
+      className:
+        "text-[10px] font-medium uppercase tracking-wide text-gray-400 mb-3 mt-1",
+      textContent: "Files",
+    }),
   );
-  const hrefMap = new Map<string, string>();
-  fileLinks.forEach((a) => {
-    const name = a.textContent?.trim();
-    if (name && a.hash) hrefMap.set(name, a.hash);
-  });
-
-  const root = new Map<string, any>();
-  for (const file of files || []) {
-    const parts = file.split("/");
-    let current = root;
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      const isFile = i === parts.length - 1;
-      if (isFile) {
-        current.set(part, file);
-      } else {
-        if (!current.has(part)) {
-          current.set(part, new Map<string, any>());
-        }
-        current = current.get(part);
-      }
-    }
-  }
-
-  const treeContainer = document.createElement("div");
-  treeContainer.className = "flex flex-col";
-  renderTreeLevel(treeContainer, root, hrefMap, 0);
   container.appendChild(treeContainer);
 }
 
 function renderCommentIndicators(
   outputEl: HTMLElement,
   comments: Comment[],
+  popupSignal: AbortSignal,
   onDelete: (comment: Comment) => void,
 ) {
   outputEl.querySelectorAll(".towelie-comment-btn").forEach((el) => {
@@ -323,11 +327,17 @@ function renderCommentIndicators(
         popup.appendChild(deleteBtn);
         firstRow!.appendChild(popup);
 
-        const close = () => {
+        const closeHandler = () => {
           popup.remove();
-          document.removeEventListener("click", close);
         };
-        document.addEventListener("click", close);
+        setTimeout(
+          () =>
+            document.addEventListener("click", closeHandler, {
+              once: true,
+              signal: popupSignal,
+            }),
+          0,
+        );
       });
 
       firstRow.appendChild(btn);
@@ -339,6 +349,7 @@ function showInlineCommentForm(
   anchor: HTMLElement,
   selection: Selection,
   onSubmit: (selection: Selection, text: string) => void,
+  onClose: () => void,
 ): HTMLElement {
   const { fileName, startLine, endLine, diffSide } = selection;
 
@@ -381,6 +392,7 @@ function showInlineCommentForm(
       if (text) {
         onSubmit(selection, text);
         form.remove();
+        onClose();
       }
     });
 
@@ -388,11 +400,14 @@ function showInlineCommentForm(
     .querySelector('[data-action="cancel"]')!
     .addEventListener("click", () => {
       form.remove();
+      onClose();
     });
 
   anchor.insertAdjacentElement("afterend", form);
 
-  const scrollParent = form.closest(".d2h-file-side-diff") as HTMLElement | null;
+  const scrollParent = form.closest(
+    ".d2h-file-side-diff",
+  ) as HTMLElement | null;
   const innerDiv = form.querySelector("div")!;
   if (scrollParent) {
     innerDiv.style.width = `${scrollParent.clientWidth - 24}px`;
@@ -401,7 +416,6 @@ function showInlineCommentForm(
   form.querySelector("textarea")!.focus();
   return form;
 }
-
 
 export default class ReviewController extends Controller {
   static targets = [
@@ -423,103 +437,134 @@ export default class ReviewController extends Controller {
   declare readonly sidebarToggleTarget: HTMLElement;
 
   private storage = new CommentStorage();
+  private currentBranchName = "current";
   private activeForm: HTMLElement | null = null;
-  private selection: Partial<Selection> | null = null;
+  private commentPopupAbortController: AbortController | null = null;
+  private selectionState: SelectionState = {
+    start: null,
+    rows: new Set<HTMLElement>(),
+    row: null,
+    selecting: false,
+    hadStart: false,
+    didDrag: false,
+  };
   private sidebarVisible = true;
 
   async connect() {
     this.storage.load();
     await this.reloadReview();
-
-    this.outputTarget.addEventListener("mousedown", (e) => {
-      if (!(e.target instanceof HTMLElement)) return;
-      if (!e.target.classList.contains("d2h-code-side-linenumber")) return;
-      const lineNumber = Number(e.target.textContent);
-      if (isNaN(lineNumber)) return;
-
-      const fileDiffContainer = e.target.closest(".d2h-file-wrapper")!;
-      const fileName =
-        fileDiffContainer
-          .querySelector(".d2h-file-name")
-          ?.textContent?.trim() || "unknown";
-
-      const filesDiv = e.target.closest(".d2h-files-diff");
-      let diffSide = DiffSide.New;
-      if (filesDiv) {
-        const sides = Array.from(
-          filesDiv.querySelectorAll(":scope > .d2h-file-side-diff"),
-        );
-        const sideDiv = e.target.closest(".d2h-file-side-diff");
-        if (sideDiv === sides[0]) diffSide = DiffSide.Old;
-      }
-
-      if (this.selection === null) {
-        this.selection = { fileName, startLine: lineNumber, diffSide };
-        return;
-      }
-      this.selection.endLine = lineNumber;
-      const sel = this.selection as Selection;
-
-      const row =
-        e.target.closest("tr") ||
-        e.target.closest(".d2h-code-line-ctn")?.parentElement;
-      if (!row) return;
-
-      this.selection = null;
-      if (this.activeForm) {
-        this.activeForm.remove();
-        this.activeForm = null;
-      }
-      this.activeForm = showInlineCommentForm(
-        row as HTMLElement,
-        sel,
-        (selection, text) => {
-          const branch = this.branchSelectTarget.value || "current";
-          this.storage.add(selection, text, branch);
-          this.activeForm = null;
-          this.renderComments();
-        },
-      );
-    });
+    this.outputTarget.addEventListener("mousedown", this.HighlightSelectedLine);
+    this.outputTarget.addEventListener("mousemove", this.highlightLineNumber);
+    document.addEventListener("mouseup", this.ConfirmCommentSelection);
   }
 
-  branchChanged() {
-    this.commitSelectTarget.value = "";
-    this.reloadReview();
+  disconnect() {
+    this.outputTarget.removeEventListener(
+      "mousedown",
+      this.HighlightSelectedLine,
+    );
+    this.outputTarget.removeEventListener(
+      "mousemove",
+      this.highlightLineNumber,
+    );
+    document.removeEventListener("mouseup", this.ConfirmCommentSelection);
   }
 
   async reloadReview() {
+    await this.populateInfo();
     const branch = this.branchSelectTarget.value;
     const base = this.baseBranchSelectTarget.value;
     const commit = this.commitSelectTarget.value;
 
-    const params = new URLSearchParams();
-    if (branch) params.set("branch", branch);
-    if (base) params.set("base", base);
-    if (commit) params.set("commit", commit);
+    const [diff, options] = await Promise.all([
+      getDiff({ branch, base, commit }),
+      getOptions(),
+    ]);
 
-    const url = params.toString()
-      ? `/api/diff?${params.toString()}`
-      : "/api/diff";
-    const res = await fetch(url);
-    const data: DiffResponse = await res.json();
+    const outputFormat =
+      options.diff.style === "inline" ? "line-by-line" : "side-by-side";
 
     this.outputTarget.innerHTML = "";
-    const diff2htmlUi = new Diff2HtmlUI(this.outputTarget, data.diff, {
+    const diff2htmlUi = new Diff2HtmlUI(this.outputTarget, diff.diff.diff, {
       drawFileList: true,
       matching: "lines",
-      outputFormat: "side-by-side",
+      outputFormat,
+      fileContentToggle: true,
+      diffMaxChanges: 1000,
     });
     diff2htmlUi.draw();
-    renderFileTree(this.fileExplorerTarget, this.outputTarget, data.files);
-    populateCommitSelect(this.commitSelectTarget, data);
-    populateBranchSelects(
-      this.branchSelectTarget,
-      this.baseBranchSelectTarget,
-      data,
-    );
+
+    this.outputTarget
+      .querySelectorAll<HTMLElement>(".d2h-file-wrapper")
+      .forEach((wrapper) => {
+        wrapper.style.contentVisibility = "auto";
+        wrapper.style.containIntrinsicSize = "auto 500px";
+      });
+    this.decorateLineNumbersAndRenderComments();
+    renderFileTree(this.fileExplorerTarget, this.outputTarget, diff.diff.files);
     this.storage.load();
-    this.renderComments();
+  }
+
+  async populateInfo() {
+    const info = await getInfo();
+    this.currentBranchName = info.current_branch;
+    const branchSelect = this.branchSelectTarget;
+    const baseBranchSelect = this.baseBranchSelectTarget;
+    const commitSelect = this.commitSelectTarget;
+    const savedBranch = branchSelect.value;
+    const savedBase = baseBranchSelect.value;
+    const savedCommit = commitSelect.value;
+    const branchNames = info.branches.map((branch) => branch.name);
+
+    branchSelect.innerHTML = "";
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.textContent = `${info.current_branch} (current)`;
+    branchSelect.appendChild(defaultOption);
+    branchNames.forEach((branchName) => {
+      if (branchName === info.current_branch) return;
+      const option = document.createElement("option");
+      option.value = branchName;
+      option.textContent = branchName;
+      branchSelect.appendChild(option);
+    });
+    branchSelect.value =
+      savedBranch && branchNames.includes(savedBranch) ? savedBranch : "";
+
+    baseBranchSelect.innerHTML = "";
+    branchNames.forEach((branchName) => {
+      const option = document.createElement("option");
+      option.value = branchName;
+      option.textContent = branchName;
+      baseBranchSelect.appendChild(option);
+    });
+
+    if (savedBase && branchNames.includes(savedBase)) {
+      baseBranchSelect.value = savedBase;
+    } else {
+      baseBranchSelect.value = info.base_branch;
+    }
+    const selectedBranchName = branchSelect.value || info.current_branch;
+    const selectedBranch = info.branches.find(
+      (branch) => branch.name === selectedBranchName,
+    );
+    const commits = selectedBranch?.commits ?? [];
+
+    commitSelect.innerHTML = "";
+    commits.forEach((commit) => {
+      const option = document.createElement("option");
+      option.value = commit.hash;
+      option.textContent = commit.label;
+      commitSelect.appendChild(option);
+    });
+
+    commitSelect.value = commits.some((commit) => commit.hash === savedCommit)
+      ? savedCommit
+      : commits.length > 0
+        ? commits[0].hash
+        : "";
+
+    return info;
   }
 
   toggleSidebar() {
@@ -536,8 +581,10 @@ export default class ReviewController extends Controller {
 
   async finishReview(e: Event) {
     const btn = e.currentTarget as HTMLButtonElement;
-    const currentBranch = this.branchSelectTarget.value || "current";
-    const branchComments = this.storage.forBranch(currentBranch);
+    const selectedBranch = this.branchSelectTarget.value;
+    const storageBranch = selectedBranch || "current";
+    const renderedBranch = selectedBranch || this.currentBranchName;
+    const branchComments = this.storage.forBranch(storageBranch);
 
     if (branchComments.length === 0) {
       flashButton(btn, "No comments to copy", 2000);
@@ -552,24 +599,263 @@ export default class ReviewController extends Controller {
           : "new code (after the change)";
       return `${s.fileName} lines ${s.startLine}-${s.endLine} on the ${sideLabel}\n\n\`\`\`\n${c.text}\n\`\`\``;
     });
-    const reviewText =
-      "Here's the review of the user:\n\n" + blocks.join("\n\n---\n\n");
+    const commentsBlock = blocks.join("\n\n---\n\n");
+    const template = (await getOptions()).prompt.template;
+    let reviewText = applyPromptTemplate(template, {
+      comments: commentsBlock,
+      branch: renderedBranch,
+      comment_count: String(branchComments.length),
+    });
+    if (!template.includes("{{comments}}")) {
+      const trimmed = reviewText.trimEnd();
+      reviewText = trimmed ? `${trimmed}\n\n${commentsBlock}` : commentsBlock;
+    }
 
     await navigator.clipboard.writeText(reviewText);
-    this.storage.clearBranch(currentBranch);
-    this.renderComments();
+    this.storage.clearBranch(storageBranch);
+    this.decorateLineNumbersAndRenderComments();
     flashButton(btn, "Copied to clipboard!", 2000);
   }
 
-  private renderComments() {
+  private decorateLineNumbersAndRenderComments() {
+    this.commentPopupAbortController?.abort();
+    this.commentPopupAbortController = new AbortController();
+
+    const lineNumbers = this.outputTarget.querySelectorAll<HTMLElement>(
+      ".d2h-code-side-linenumber",
+    );
+    lineNumbers.forEach((el) => {
+      el.classList.add("towelie-commentable");
+      if (!el.title) {
+        el.title = "Click or drag to add a comment";
+      }
+    });
+
     const branch = this.branchSelectTarget.value || "current";
     renderCommentIndicators(
       this.outputTarget,
       this.storage.forBranch(branch),
+      this.commentPopupAbortController.signal,
       (comment) => {
         this.storage.remove(comment);
-        this.renderComments();
+        this.decorateLineNumbersAndRenderComments();
       },
     );
   }
+
+  // Ensures startLine <= endLine regardless of drag direction
+  private normalizeSelection(selection: Selection): Selection {
+    const start = Math.min(selection.startLine, selection.endLine);
+    const end = Math.max(selection.startLine, selection.endLine);
+    return {
+      ...selection,
+      startLine: start,
+      endLine: end,
+    };
+  }
+
+  private clearSelectionHighlight() {
+    this.selectionState.rows.forEach((row) => {
+      row.classList.remove("towelie-comment-range", "towelie-comment-anchor");
+    });
+    this.selectionState.rows.clear();
+  }
+
+  private selectionFromLocation(location: LineLocation): Selection {
+    return {
+      fileName: location.fileName,
+      startLine: location.lineNumber,
+      endLine: location.lineNumber,
+      diffSide: location.diffSide,
+    };
+  }
+
+  private matchesSelectionLocation(
+    selection: Selection,
+    location: LineLocation,
+  ): boolean {
+    return (
+      selection.fileName === location.fileName &&
+      selection.diffSide === location.diffSide
+    );
+  }
+
+  // Highlights selected line range in the diff view with colored backgrounds
+  private updateSelectionHighlight() {
+    if (!this.selectionState.start) return;
+    const normalized = this.normalizeSelection(this.selectionState.start);
+    this.clearSelectionHighlight();
+
+    const wrappers = Array.from(
+      this.outputTarget.querySelectorAll(".d2h-file-wrapper"),
+    );
+    const wrapper = wrappers.find((item) => {
+      const nameEl = item.querySelector(".d2h-file-name");
+      return nameEl?.textContent?.trim() === normalized.fileName;
+    });
+    if (!wrapper) return;
+
+    const filesDiv = wrapper.querySelector(".d2h-files-diff");
+    if (!filesDiv) return;
+
+    const sides = Array.from(
+      filesDiv.querySelectorAll(":scope > .d2h-file-side-diff"),
+    );
+    const sideContainer =
+      normalized.diffSide === DiffSide.Old ? sides[0] : sides[1];
+    if (!sideContainer) return;
+
+    const lineNumberEls = Array.from(
+      sideContainer.querySelectorAll(".d2h-code-side-linenumber"),
+    );
+    // Find all rows within the selected line range and apply highlight classes
+    for (const lineEl of lineNumberEls) {
+      const num = Number((lineEl as HTMLElement).textContent);
+      if (
+        isNaN(num) ||
+        num < normalized.startLine ||
+        num > normalized.endLine
+      ) {
+        continue;
+      }
+
+      const row = (lineEl as HTMLElement).closest("tr") as HTMLElement | null;
+      if (!row) continue;
+
+      row.classList.add("towelie-comment-range");
+      if (num === normalized.startLine) {
+        row.classList.add("towelie-comment-anchor");
+      }
+      this.selectionState.rows.add(row);
+    }
+  }
+
+  private getLineContext(target: EventTarget | null): LineContext | null {
+    if (!(target instanceof HTMLElement)) return null;
+
+    const lineCell =
+      (target.closest("td.d2h-code-side-linenumber") as HTMLElement | null) ||
+      (target.closest("td.d2h-code-side-line")
+        ?.previousElementSibling as HTMLElement | null);
+    if (!lineCell) return null;
+
+    const lineNumber = Number(lineCell.textContent);
+    if (isNaN(lineNumber)) return null;
+
+    const row = lineCell.closest("tr") as HTMLElement | null;
+    if (!row) return null;
+
+    const fileDiffContainer = lineCell.closest(".d2h-file-wrapper");
+    const fileName =
+      fileDiffContainer?.querySelector(".d2h-file-name")?.textContent?.trim() ||
+      "unknown";
+
+    const filesDiv = lineCell.closest(".d2h-files-diff");
+    let diffSide = DiffSide.New;
+    if (filesDiv) {
+      const sides = Array.from(
+        filesDiv.querySelectorAll(":scope > .d2h-file-side-diff"),
+      );
+      const sideDiv = lineCell.closest(".d2h-file-side-diff");
+      if (sideDiv === sides[0]) diffSide = DiffSide.Old;
+    }
+
+    return {
+      location: {
+        fileName,
+        diffSide,
+        lineNumber,
+      },
+      row,
+    };
+  }
+
+  private HighlightSelectedLine = (e: MouseEvent) => {
+    const context = this.getLineContext(e.target);
+    if (!context) return;
+
+    e.preventDefault();
+
+    if (this.activeForm) {
+      this.activeForm.remove();
+      this.activeForm = null;
+    }
+
+    const { location, row } = context;
+
+    if (
+      !this.selectionState.start ||
+      !this.matchesSelectionLocation(this.selectionState.start, location)
+    ) {
+      this.selectionState.start = this.selectionFromLocation(location);
+      this.selectionState.hadStart = false;
+    } else {
+      this.selectionState.start.endLine = location.lineNumber;
+      this.selectionState.hadStart = true;
+    }
+
+    this.selectionState.selecting = true;
+    this.selectionState.didDrag = false;
+
+    this.selectionState.row = row;
+    this.updateSelectionHighlight();
+  };
+
+  private highlightLineNumber = (e: MouseEvent) => {
+    if (!this.selectionState.selecting || !this.selectionState.start) return;
+    const context = this.getLineContext(e.target);
+    if (!context) return;
+
+    const { location, row } = context;
+    if (!this.matchesSelectionLocation(this.selectionState.start, location)) {
+      return;
+    }
+
+    if (this.selectionState.start.endLine !== location.lineNumber) {
+      this.selectionState.start.endLine = location.lineNumber;
+      this.selectionState.row = row;
+      this.selectionState.didDrag =
+        this.selectionState.start.startLine !==
+        this.selectionState.start.endLine;
+      this.updateSelectionHighlight();
+    }
+  };
+
+  private ConfirmCommentSelection = () => {
+    if (!this.selectionState.selecting) return;
+    this.selectionState.selecting = false;
+
+    if (!this.selectionState.start || !this.selectionState.row) {
+      this.selectionState.start = null;
+      this.clearSelectionHighlight();
+      return;
+    }
+
+    const shouldCommit =
+      this.selectionState.didDrag || this.selectionState.hadStart;
+    const normalized = this.normalizeSelection(this.selectionState.start);
+    this.selectionState.hadStart = false;
+    this.selectionState.didDrag = false;
+
+    if (!shouldCommit) {
+      this.updateSelectionHighlight();
+      return;
+    }
+
+    this.selectionState.start = null;
+
+    this.activeForm = showInlineCommentForm(
+      this.selectionState.row,
+      normalized,
+      (selection, text) => {
+        const branch = this.branchSelectTarget.value || "current";
+        this.storage.add(selection, text, branch);
+        this.activeForm = null;
+        this.decorateLineNumbersAndRenderComments();
+      },
+      () => {
+        this.clearSelectionHighlight();
+      },
+    );
+  };
 }

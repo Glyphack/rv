@@ -7,13 +7,12 @@
     "@tailwindcss/cli": "^4.1.18",
     "@tailwindcss/language-server": "^0.14.29",
     "diff2html": "^3.4.56",
-    "esbuild": "^0.27.3",
     "highlight.js": "^11.11.1",
     "tailwindcss": "^4.1.18"
   },
   "scripts": {
-    "build": "bunx esbuild web/src/main.ts --bundle --outfile=./src/towelie/static/bundle.js",
-    "watch": "bunx esbuild web/src/main.ts --bundle --outfile=./src/towelie/static/bundle.js --watch"
+    "build": "bun install --frozen-lockfile && bun build web/src/main.ts --bundle --outdir=./src/towelie/static && bunx @tailwindcss/cli -i ./src/towelie/static/input.css -o ./src/towelie/static/output.css --minify",
+    "watch": "sh -c 'bun build web/src/main.ts --bundle --outdir=./src/towelie/static --watch & bunx @tailwindcss/cli -i ./src/towelie/static/input.css -o ./src/towelie/static/output.css --watch & wait'"
   },
   "devDependencies": {
     "prettier": "3.8.1",

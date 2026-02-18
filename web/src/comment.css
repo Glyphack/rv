@@ -1,0 +1,40 @@
+td.d2h-code-side-linenumber.towelie-commentable {
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+td.d2h-code-side-linenumber.towelie-commentable:hover {
+  background-color: rgba(16, 185, 129, 0.14);
+  color: #065f46;
+}
+
+td.d2h-code-side-linenumber.towelie-commentable:hover::before {
+  content: "+";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #10b981;
+  pointer-events: none;
+}
+
+tr.towelie-comment-range td.d2h-code-side-linenumber {
+  background-color: rgba(251, 191, 36, 0.38);
+}
+
+tr.towelie-comment-range td.d2h-code-side-line {
+  background-color: rgba(251, 191, 36, 0.12);
+}
+
+tr.towelie-comment-anchor td.d2h-code-side-linenumber {
+  background-color: rgba(248, 113, 113, 0.38);
+  color: #7f1d1d;
+}
+
+tr.towelie-comment-anchor td.d2h-code-side-line {
+  background-color: rgba(248, 113, 113, 0.12);
+}
